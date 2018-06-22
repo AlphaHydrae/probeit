@@ -9,6 +9,14 @@ const url = require('url');
 
 const app = new Koa();
 
+app.use(async (ctx, next) => {
+  if (ctx.path !== '/') {
+    ctx.status = 404;
+  } else {
+    await next();
+  }
+});
+
 app.use(async ctx => {
 
   const target = ctx.query.target;
