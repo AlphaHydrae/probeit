@@ -1,0 +1,27 @@
+{
+  "name": "probeit",
+  "version": "1.0.0",
+  "description": "Probe endpoints over HTTP & HTTPS.",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "probe",
+    "http",
+    "prometheus"
+  ],
+  "author": "Simon Oulevay <npm@alphahydrae.com>",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^2.4.1",
+    "inflection": "^1.12.0",
+    "koa": "^2.5.1",
+    "lodash": "^4.17.10",
+    "moment": "^2.22.2"
+  },
+  "devDependencies": {
+    "nodemon": "^1.17.5"
+  }
+}
