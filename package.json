@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "Probe endpoints over HTTP & HTTPS.",
   "main": "src/index.js",
+  "bin": {
+    "probe-srv": "./bin/probe-srv"
+  },
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "dev": "nodemon bin/probe-srv",
+    "start": "node bin/probe-srv"
   },
   "repository": {
     "type": "git",
