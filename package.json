@@ -40,5 +40,8 @@
   },
   "devDependencies": {
     "nodemon": "^1.17.5"
+  },
+  "engines": {
+    "node": ">= 8.0.0 < 11.0.0"
   }
 }
