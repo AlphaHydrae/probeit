@@ -1,5 +1,6 @@
 FROM node:10.5.0-alpine as builder
 
+COPY bin/ /usr/src/app/bin/
 COPY package.json package-lock.json /usr/src/app/
 COPY src/ /usr/src/app/src/
 
