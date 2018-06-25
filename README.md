@@ -1,6 +1,6 @@
 # Probe Server
 
-Server to easily probe endpoints over HTTP & HTTPS.
+Server to easily probe endpoints over HTTP & HTTPS, producing metrics in JSON or for [Prometheus](https://prometheus.io).
 
 [![npm version](https://badge.fury.io/js/probe-srv.svg)](https://badge.fury.io/js/probe-srv)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
@@ -43,3 +43,11 @@ probe-srv
 **Then, try it**
 
 Visit [http://localhost:3000?target=https://google.com&pretty=true](http://localhost:3000?target=https://google.com&pretty=true)
+
+
+
+## Prometheus format
+
+To get the metrics in [Prometheus](https://prometheus.io)'s text format, use the `/metrics` path:
+
+[http://probe-srv.herokuapp.com/metrics?target=https://google.com&pretty=true](http://probe-srv.herokuapp.com/metrics?target=https://google.com&pretty=true)
