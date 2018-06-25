@@ -10,23 +10,25 @@ Server to easily probe endpoints over HTTP & HTTPS.
 
 ## Usage
 
-**Global installation**
+**Run with [Docker](https://www.docker.com)**
+
+```bash
+docker run -p 3000:3000 alphahydrae/probe-srv
+```
+
+**Or, run with [npx](https://github.com/zkat/npx)**
+
+```bash
+npx probe-srv
+```
+
+**Or, install globally and run manually**
 
 ```bash
 npm install -g probe-srv
 probe-srv
 ```
 
-**With [npx](https://github.com/zkat/npx)**
+**Then, try it**
 
-```bash
-npx probe-srv
-```
-
-**With Docker**
-
-```bash
-docker run -p 3000:3000 alphahydrae/probe-srv
-```
-
-Then visit [http://localhost:3000?target=https://google.com&pretty=true](http://localhost:3000?target=https://google.com&pretty=true)
+Visit [http://localhost:3000?target=https://google.com&pretty=true](http://localhost:3000?target=https://google.com&pretty=true)
