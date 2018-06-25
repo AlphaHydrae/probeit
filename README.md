@@ -2,6 +2,8 @@
 
 Server to easily probe endpoints over HTTP & HTTPS, producing metrics in JSON or for [Prometheus](https://prometheus.io).
 
+Inspired by [Prometheus Blackbox Exporter](https://github.com/prometheus/blackbox_exporter).
+
 [![npm version](https://badge.fury.io/js/probe-srv.svg)](https://badge.fury.io/js/probe-srv)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
 
