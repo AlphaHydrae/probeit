@@ -26,6 +26,7 @@
   },
   "homepage": "https://github.com/AlphaHydrae/probe-srv#readme",
   "files": [
+    "bin",
     "LICENSE.txt",
     "README.md",
     "src"
