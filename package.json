@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "nodemon bin/probe-srv",
+    "lint": "eslint src",
+    "prepublishOnly": "npm run lint",
     "start": "node bin/probe-srv"
   },
   "repository": {
@@ -39,6 +41,9 @@
     "moment": "^2.22.2"
   },
   "devDependencies": {
+    "eslint": "^5.0.1",
+    "eslint-plugin-sort-destructure-keys": "^1.0.4",
+    "eslint-plugin-sort-requires-by-path": "^1.0.2",
     "nodemon": "^1.17.5"
   },
   "engines": {
