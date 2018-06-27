@@ -143,9 +143,11 @@ These metrics are provided by the HTTP probe, which is used when the target star
   {
     "description": "Duration of the HTTP request(s) by phase, summed over all redirects, in seconds",
     "name": "httpDuration",
-    "tags": {},
+    "tags": {
+      "phase": "tlsHandshake"
+    },
     "type": "seconds",
-    "value": 0.032
+    "value": 0.02
   }
   ```
 
