@@ -101,6 +101,13 @@ function getHttpMetrics(ctx, req, res, state) {
   const success = !!res && !failures.length;
 
   metrics.push(buildMetric(
+    'httpCertificateExpiry',
+    'datetime',
+    getHttpCertificateExpiry(req),
+    'Expiration date of the SSL certificate'
+  ));
+
+  metrics.push(buildMetric(
     'httpContentLength',
     'bytes',
     res && res.headers['content-length'] ? parseInt(res.headers['content-length'], 10) : null,
@@ -121,7 +128,7 @@ function getHttpMetrics(ctx, req, res, state) {
     'httpRedirects',
     'quantity',
     state.redirects || 0,
-    'Number of redirects'
+    'Number of times HTTP 301 or 302 redirects were followed'
   ));
 
   metrics.push(buildMetric(
@@ -129,27 +136,20 @@ function getHttpMetrics(ctx, req, res, state) {
     'boolean',
     // FIXME: check whether SSL/TLS is used on final redirect (currently works at any redirect)
     state.tlsHandshake !== undefined,
-    'Indicates whether SSL/TLS was used for the final redirect'
-  ));
-
-  metrics.push(buildMetric(
-    'httpCertificateExpiry',
-    'datetime',
-    getHttpCertificateExpiry(req),
-    'Expiration date of the SSL certificate in Unix time'
+    'Indicates whether SSL/TLS was used for the final request'
   ));
 
   metrics.push(buildMetric(
     'httpStatusCode',
     'number',
     res ? res.statusCode : null,
-    'HTTP status code'
+    'HTTP status code of the final response'
   ));
 
   metrics.push(buildMetric(
     'httpVersion',
     'number',
-    res ? res.httpVersion : null,
+    res ? parseFloat(res.httpVersion) : null,
     'HTTP version of the response'
   ));
 
