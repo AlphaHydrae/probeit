@@ -3,7 +3,7 @@ const { last } = require('lodash');
 const moment = require('moment');
 const { parse: parseUrl } = require('url');
 
-const { parseBooleanQueryParam, promisified, toArray } = require('../utils');
+const { buildMetric, parseBooleanQueryParam, promisified, toArray } = require('../utils');
 
 exports.probeS3 = async function(target, ctx) {
 
@@ -22,7 +22,7 @@ exports.probeS3 = async function(target, ctx) {
     metrics: []
   };
 
-  const probeVersions = parseBooleanQueryParam(ctx.query.probeVersions);
+  const probeVersions = parseBooleanQueryParam(ctx.query.s3Versions);
 
   const objectsPromise = listAllObjects(s3, { Bucket, Prefix });
   const versionsPromise = probeVersions ? listAllObjectVersions(s3, { Bucket, Prefix }) : Promise.resolve();
@@ -54,82 +54,82 @@ function addS3Metrics(metrics, tags, objects, versions) {
 
   const objectsSortedByDate = objects.sort((a, b) => a.LastModified.getTime() - b.LastModified.getTime());
 
-  metrics.push({
-    description: 'The earliest modification date of objects',
-    name: 's3FirstObjectModificationDate',
-    tags,
-    type: 'datetime',
-    value: objectsSortedByDate.length ? moment(objectsSortedByDate[0].LastModified).format() : null
-  });
+  metrics.push(buildMetric(
+    's3FirstObjectModificationDate',
+    'datetime',
+    objectsSortedByDate.length ? moment(objectsSortedByDate[0].LastModified).format() : null,
+    'The modification date of the earliest modified object',
+    tags
+  ));
 
-  metrics.push({
-    description: 'The latest modification date of objects',
-    name: 's3LastObjectModificationDate',
-    tags,
-    type: 'datetime',
-    value: objectsSortedByDate.length ? moment(last(objectsSortedByDate).LastModified).format() : null
-  });
+  metrics.push(buildMetric(
+    's3LastObjectModificationDate',
+    'datetime',
+    objectsSortedByDate.length ? moment(last(objectsSortedByDate).LastModified).format() : null,
+    'The modification date of the most recently modified object',
+    tags
+  ));
 
-  metrics.push({
-    description: 'Number of objects',
-    name: 's3ObjectsCount',
-    tags,
-    type: 'quantity',
-    value: objects.length
-  });
+  metrics.push(buildMetric(
+    's3ObjectsCount',
+    'quantity',
+    objects.length,
+    'Number of objects',
+    tags
+  ));
 
   const objectSizes = objects.map(o => o.Size);
 
-  metrics.push({
-    description: 'The size of the smallest object in bytes',
-    name: 's3SmallestObjectSize',
-    tags,
-    type: 'bytes',
-    value: objectSizes.length ? Math.min(Number.MAX_SAFE_INTEGER, ...objectSizes) : null
-  });
+  metrics.push(buildMetric(
+    's3SmallestObjectSize',
+    'bytes',
+    objectSizes.length ? Math.min(Number.MAX_SAFE_INTEGER, ...objectSizes) : null,
+    'The size of the smallest object in bytes',
+    tags
+  ));
 
-  metrics.push({
-    description: 'The size of the largest object in bytes',
-    name: 's3LargestObjectSize',
-    tags,
-    type: 'bytes',
-    value: objectSizes.length ? Math.max(0, ...objectSizes) : null
-  });
+  metrics.push(buildMetric(
+    's3LargestObjectSize',
+    'bytes',
+    objectSizes.length ? Math.max(0, ...objectSizes) : null,
+    'The size of the largest object in bytes',
+    tags
+  ));
 
-  metrics.push({
-    description: 'Total size of objects',
-    name: 's3ObjectsTotalSize',
-    tags,
-    type: 'bytes',
-    value: objects.reduce((memo, object) => memo + object.Size, 0)
-  });
+  metrics.push(buildMetric(
+    's3ObjectsTotalSize',
+    'bytes',
+    objects.reduce((memo, object) => memo + object.Size, 0),
+    'Total size of objects',
+    tags
+  ));
 
   if (versions) {
     const versionsSortedByDate = versions.sort((a, b) => a.LastModified.getTime() - b.LastModified.getTime());
 
-    metrics.push({
-      description: 'The earliest modification date of object versions',
-      name: 's3FirstObjectVersionModificationDate',
-      tags,
-      type: 'datetime',
-      value: versionsSortedByDate.length ? moment(versionsSortedByDate[0].LastModified).format() : null
-    });
+    metrics.push(buildMetric(
+      's3FirstObjectVersionModificationDate',
+      'datetime',
+      versionsSortedByDate.length ? moment(versionsSortedByDate[0].LastModified).format() : null,
+      'The modification date of the earliest modified object version',
+      tags
+    ));
 
-    metrics.push({
-      description: 'The latest modification date of object versions',
-      name: 's3LastObjectVersionModificationDate',
-      tags,
-      type: 'datetime',
-      value: versionsSortedByDate.length ? moment(last(versionsSortedByDate).LastModified).format() : null
-    });
+    metrics.push(buildMetric(
+      's3LastObjectVersionModificationDate',
+      'datetime',
+      versionsSortedByDate.length ? moment(last(versionsSortedByDate).LastModified).format() : null,
+      'The modification date of the most recently modified object version',
+      tags
+    ));
 
-    metrics.push({
-      description: 'Number of object versions',
-      name: 's3ObjectVersionsCount',
-      tags,
-      type: 'quantity',
-      value: versions.length
-    });
+    metrics.push(buildMetric(
+      's3ObjectVersionsCount',
+      'quantity',
+      versions.length,
+      'Number of object versions',
+      tags
+    ));
   }
 }
 

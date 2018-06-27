@@ -16,12 +16,12 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
 
 - [Usage](#usage)
   - [Installation](#installation)
-  - [Prometheus format](#prometheus-format)
 - [Metrics](#metrics)
+  - [Prometheus format](#prometheus-format)
   - [Generic metrics](#generic-metrics)
     - [`duration`](#duration)
 - [HTTP probe](#http-probe)
-  - [Metrics](#metrics-1)
+  - [HTTP probe metrics](#http-probe-metrics)
     - [`httpCertificateExpiry`](#httpcertificateexpiry)
     - [`httpContentLength`](#httpcontentlength)
     - [`httpDuration`](#httpduration)
@@ -29,12 +29,12 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
     - [`httpSecure`](#httpsecure)
     - [`httpStatusCode`](#httpstatuscode)
     - [`httpVersion`](#httpversion)
-  - [Parameters](#parameters)
+  - [HTTP probe parameters](#http-probe-parameters)
     - [`allowUnauthorized`](#allowunauthorized)
     - [`followRedirects`](#followredirects)
     - [`method`](#method)
     - [`header`](#header)
-  - [Expectations](#expectations)
+  - [HTTP probe expectations](#http-probe-expectations)
     - [`expectHttpRedirects`](#expecthttpredirects)
     - [`expectHttpRedirectTo`](#expecthttpredirectto)
     - [`expectHttpResponseBodyMatch`](#expecthttpresponsebodymatch)
@@ -42,7 +42,7 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
     - [`expectHttpSecure`](#expecthttpsecure)
     - [`expectHttpStatusCode`](#expecthttpstatuscode)
     - [`expectHttpVersion`](#expecthttpversion)
-  - [Failures](#failures)
+  - [HTTP probe failures](#http-probe-failures)
     - [`httpResponseBodyMismatch`](#httpresponsebodymismatch)
     - [`insecureHttp`](#insecurehttp)
     - [`invalidHttpRedirectCount`](#invalidhttpredirectcount)
@@ -53,6 +53,20 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
     - [`unexpectedHttpRedirect`](#unexpectedhttpredirect)
     - [`unexpectedHttpResponseBodyMatch`](#unexpectedhttpresponsebodymatch)
     - [`unexpectedlySecureHttp`](#unexpectedlysecurehttp)
+- [S3 probe](#s3-probe)
+  - [S3 probe metrics](#s3-probe-metrics)
+    - [`s3FirstObjectModificationDate`](#s3firstobjectmodificationdate)
+    - [`s3FirstObjectVersionModificationDate`](#s3firstobjectversionmodificationdate)
+    - [`s3LargestObjectSize`](#s3largestobjectsize)
+    - [`s3LastObjectModificationDate`](#s3lastobjectmodificationdate)
+    - [`s3LastObjectVersionModificationDate`](#s3lastobjectversionmodificationdate)
+    - [`s3ObjectsCount`](#s3objectscount)
+    - [`s3ObjectsTotalSize`](#s3objectstotalsize)
+    - [`s3ObjectVersionsCount`](#s3objectversionscount)
+    - [`s3SmallestObjectSize`](#s3smallestobjectsize)
+  - [S3 probe parameters](#s3-probe-parameters)
+    - [`s3ByPrefix`](#s3byprefix)
+    - [`s3Versions`](#s3versions)
 - [Versioning policy](#versioning-policy)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -62,20 +76,39 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
 ## Usage
 
 Visit
-[http://probe-srv.herokuapp.com/?target=https://google.com&pretty=true](http://probe-srv.herokuapp.com/?target=https://google.com&pretty=true)
-for a sample probe of an HTTPS endpoint.
+[http://probe-srv.herokuapp.com/?target=http://google.com&pretty=true](http://probe-srv.herokuapp.com/?target=http://google.com&pretty=true)
+for a sample probe of an HTTP endpoint.
 
 The `target` query parameter indicates what to probe:
 
-* An HTTP(S) endpoint, e.g. `https://google.com`
-* An S3 bucket, e.g. `s3://aws_access_key_id:aws_secret_access_key@bucket_name`
+* An HTTP(S) endpoint, e.g. `https://google.com`, to use the [HTTP
+  probe](#http-probe)
+* An S3 bucket URL, e.g. `s3://bucket_name`, to use the [S3 probe](#s3-probe)
 
 The response will be a JSON object with:
 
 * A `success` boolean property indicating whether the probe was successful.
 * A `metrics` array of objects, describing various metrics collected from the
-  probed endpoint, such as duration, HTTP status code, number of S3 objects, etc.
+  probed target, such as duration of the probe, HTTP status code, number of S3
+  objects, etc.
 * A `failures` array which may indicate possible causes of the probe's failure.
+
+```json
+{
+  "failures": [],
+  "metrics": [
+    {
+      "description": "How long the probe took to complete in seconds",
+      "name": "duration",
+      "tags": {},
+      "type": "seconds",
+      "value": 0.12
+    },
+    ...
+  ],
+  "success": true
+}
+```
 
 
 
@@ -102,7 +135,44 @@ probe-srv
 
 **Then, try it**
 
-Visit [http://localhost:3000?target=https://google.com&pretty=true](http://localhost:3000?target=https://google.com&pretty=true)
+Visit [http://localhost:3000?target=http://google.com&pretty=true](http://localhost:3000?target=http://google.com&pretty=true)
+
+
+
+## Metrics
+
+The server's probes provide various metrics about their target, mostly numeric
+values such as counts, bytesizes, last modification dates, etc.
+
+Each metric is a JSON object with the following format:
+
+```json
+{
+  "description": "What I am",
+  "name": "myName",
+  "tags": {
+    "meta": "data"
+  },
+  "type": "seconds",
+  "value": 1.2
+}
+```
+
+The following metric types exist at this time:
+
+* **boolean** - `true` or `false`.
+* **bytes** - Integer greater than or equal to zero.
+* **datetime** - Date in ISO-8601 format.
+* **number** - Number with no associated unit of measurement.
+* **quantity** - Integer greater than or equal to zero, representing an amount
+  of something.
+* **seconds** - Number greater than or equal to zero.
+
+The **value of a metric may be `null`** if it cannot be determined (e.g. the
+[`httpCertificateExpiry` metric](#httpcertificateexpiry) can be `null` if the
+HTTP request is not made over TLS, or the [`s3LastObjectModificationDate`
+metric](#s3lastobjectmodificationdate) can be `null` if the S3 bucket contains
+no objects).
 
 
 
@@ -110,13 +180,29 @@ Visit [http://localhost:3000?target=https://google.com&pretty=true](http://local
 
 To get the metrics in [Prometheus](https://prometheus.io)'s text format, use the `/metrics` path:
 
-[http://probe-srv.herokuapp.com/metrics?target=https://google.com](http://probe-srv.herokuapp.com/metrics?target=https://google.com)
+[http://probe-srv.herokuapp.com/metrics?target=http://google.com](http://probe-srv.herokuapp.com/metrics?target=http://google.com)
 
+Metric names are converted from the JSON's camel-case format to **underscored
+format** and the **`probe_` prefix** is prepended (e.g.  `httpStatusCode`
+becomes `probe_http_status_code`). Additionally, the metric's **type is added as
+a suffix** if it's `bytes` or `seconds` (e.g. `duration` becomes
+`probe_duration_seconds`).
 
+Metric tags are added as labels.
 
-## Metrics
+All metrics will be provided as
+[gauges](https://prometheus.io/docs/concepts/metric_types/#gauge) by applying
+the following conversions by type:
 
-This section lists all metrics produced by the various probes.
+* **boolean** - `true` becomes `1` and `false` becomes `0`.
+* **bytes** - No conversion, except for `null` which becomes `-1`.
+* **datetime** - Dates are provided in [Unix
+  time](https://en.wikipedia.org/wiki/Unix_time), i.e. the number of seconds
+  that have elapsed since 00:00:00 UTC on Thursday, 1 January 1970. `null`
+  becomes `-1`.
+* **number** - No conversion, except for `null` which becomes `NaN`.
+* **quantity** - No conversion, except for `null` which becomes `-1`.
+* **seconds** - No conversion, except for `null` which becomes `-1`.
 
 
 
@@ -152,7 +238,7 @@ redirects, and provide various metrics about the HTTP response.
 
 
 
-### Metrics
+### HTTP probe metrics
 
 The following sub-headings document the metrics provided by the HTTP probe.
 
@@ -283,7 +369,7 @@ HTTP version of the final response.
 
 
 
-### Parameters
+### HTTP probe parameters
 
 The following sub-headings document URL query parameters that can be provided to
 customize the behavior of the HTTP probe.
@@ -335,7 +421,7 @@ set multiple headers.
 
 
 
-### Expectations
+### HTTP probe expectations
 
 The following sub-headings document URL query parameters that can be
 provided to customize how the HTTP probe will determine if it was successful.
@@ -358,6 +444,12 @@ For the probe to be considered successful with this parameter:
 ?expectHttpRedirects=2
 ```
 
+**Possible failures:**
+
+* [`invalidHttpRedirectCount`](#invalidhttpredirectcount)
+* [`missingHttpRedirect`](#missinghttpredirect)
+* [`unexpectedHttpRedirect`](#unexpectedhttpredirect)
+
 #### `expectHttpRedirectTo`
 
 **Type:** URL
@@ -374,6 +466,10 @@ For the probe to be considered successful with this parameter:
 ?expectHttpRedirectTo=http%3A%2F%2Fexample.com%2Fpath
 ```
 
+**Possible failures:**
+
+* [`invalidHttpRedirectLocation`](#invalidhttpredirectlocation)
+
 #### `expectHttpResponseBodyMatch`
 
 **Type:** regular expression, **Repeatable**
@@ -387,6 +483,10 @@ This parameter can be repeated to check the presence of multiple patterns.
 // The value is "Catch \d{2}", URL-encoded
 ?expectHttpResponseBodyMatch=Catch%20%5Cd%7B2%7D
 ```
+
+**Possible failures:**
+
+* [`httpResponseBodyMismatch`](#httpresponsebodymismatch)
 
 #### `expectHttpResponseBodyMismatch`
 
@@ -402,6 +502,10 @@ This parameter can be repeated to check the absence of multiple patterns.
 ?expectHttpResponseBodyMismatch=connection+lost
 ```
 
+**Possible failures:**
+
+* [`unexpectedHttpResponseBodyMatch`](#unexpectedhttpresponsebodymatch)
+
 #### `expectHttpSecure`
 
 **Type:** boolean
@@ -416,11 +520,16 @@ By default, either is considered successful.
 
 Note that this does not affect the probe's behavior of failing if an SSL
 certificate is invalid. Use the [`allowUnauthorized`
-parameter](#allowUnauthorized) for that.
+parameter](#allowunauthorized) for that.
 
 ```
 ?expectHttpSecure=true
 ```
+
+**Possible failures:**
+
+* [`insecureHttp`](#insecurehttp)
+* [`unexpectedlySecureHttp`](#unexpectedlysecurehttp)
 
 #### `expectHttpStatusCode`
 
@@ -436,6 +545,10 @@ codes and code classes may be provided.
 ?expectHttpStatusCode=200&expectHttpStatusCode=3xx
 ```
 
+**Possible failures:**
+
+* [`invalidHttpStatusCode`](#invalidhttpstatuscode)
+
 #### `expectHttpVersion`
 
 **Type:** number
@@ -447,9 +560,13 @@ of the final response must match the expected version.
 ?expectHttpVersion=1.1
 ```
 
+**Possible failures:**
+
+* [`invalidHttpVersion`](#invalidhttpversion)
 
 
-### Failures
+
+### HTTP probe failures
 
 The following sub-headings document the possible causes of failure that may be
 included in the HTTP probe's result.
@@ -457,7 +574,8 @@ included in the HTTP probe's result.
 #### `httpResponseBodyMismatch`
 
 The body of the final HTTP response did not match some of the regular
-expressions provided with the `expectHttpResponseBodyMatch` parameter.
+expressions provided with the [`expectHttpResponseBodyMatch`
+parameter](#expecthttpresponsebodymatch).
 
 This failure will be repeated for each regular expression that did not match.
 
@@ -471,8 +589,8 @@ This failure will be repeated for each regular expression that did not match.
 
 #### `insecureHttp`
 
-The final HTTP request was expected to be over TLS due to the `expectHttpSecure`
-parameter being set to `true`, but it was not.
+The final HTTP request was expected to be over TLS due to the [`expectHttpSecure`
+parameter](#expecthttpsecure) being set to `true`, but it was not.
 
 ```json
 {
@@ -484,8 +602,9 @@ parameter being set to `true`, but it was not.
 #### `invalidHttpRedirectCount`
 
 An integer was provided as the expected number of redirects with the
-`expectHttpRedirects` parameter, and the actual number of followed redirects
-until the final HTTP response did not match that expectation.
+[`expectHttpRedirects` parameter](#expecthttpredirects), and the actual number
+of followed redirects until the final HTTP response did not match that
+expectation.
 
 ```json
 {
@@ -499,8 +618,8 @@ until the final HTTP response did not match that expectation.
 #### `invalidHttpRedirectLocation`
 
 The final redirection was expected to be made to the URL specified with the
-`expectHttpRedirectTo` parameter, but a different URL was provided by the
-server.
+[`expectHttpRedirectTo` parameter](#expecthttpredirectto), but a different URL
+was provided by the server.
 
 ```json
 {
@@ -514,8 +633,8 @@ server.
 #### `invalidHttpStatusCode`
 
 The HTTP status code of the final response did not match any of the expected
-codes or code classes provided with the `expectHttpStatusCode` parameter (or set
-by default).
+codes or code classes provided with the [`expectHttpStatusCode`
+parameter](#expecthttpstatuscode) (or set by default).
 
 ```json
 {
@@ -529,7 +648,7 @@ by default).
 #### `invalidHttpVersion`
 
 The HTTP version of the final response was not the expected version provided
-with the `expectHttpVersion` parameter.
+with the [`expectHttpVersion` parameter](#expecthttpversion).
 
 ```json
 {
@@ -542,8 +661,8 @@ with the `expectHttpVersion` parameter.
 
 #### `missingHttpRedirect`
 
-The `expectHttpRedirects` parameter was set to `true`, but no redirect was
-issued by the server.
+The [`expectHttpRedirects` parameter](#expecthttpredirects) was set to `true`,
+but no redirect was issued by the server.
 
 ```json
 {
@@ -554,8 +673,8 @@ issued by the server.
 
 #### `unexpectedHttpRedirect`
 
-The `expectHttpRedirects` parameter was set to `false`, but the server issued
-one or more redirects.
+The [`expectHttpRedirects` parameter](#expecthttpredirects) was set to `false`,
+but the server issued one or more redirects.
 
 ```json
 {
@@ -569,7 +688,8 @@ one or more redirects.
 #### `unexpectedHttpResponseBodyMatch`
 
 The body of the final HTTP response matched some of the regular expressions
-provided with the `expectHttpResponseBodyMismatch` parameter.
+provided with the [`expectHttpResponseBodyMismatch`
+parameter](#expecthttpresponsebodymismatch).
 
 This failure will be repeated for each regular expression that matched.
 
@@ -588,13 +708,258 @@ match.
 #### `unexpectedlySecureHttp`
 
 The final HTTP request was expected **not** to be over TLS due to the
-`expectHttpSecure` parameter being set to `false`, but it was.
+[`expectHttpSecure` parameter](#expecthttpsecure) being set to `false`, but it
+was.
 
 ```json
 {
   "cause": "unexpectedlySecureHttp",
   "description": "..."
 }
+```
+
+
+
+## S3 probe
+
+The S3 probe is used when the target is an URL that starts with `s3://`.  The
+format is as follows:
+
+    s3://[access_key_id:secret_access_key@]bucket_name[/prefix]
+
+For example:
+
+* `s3://my_bucket`
+* `s3://A28sdf8A:oa83ufozsr8b@secure_backups/daily`
+
+By default, the probe will list all the objects in the bucket and provide
+various metrics about these objects' sizes and last modification dates. It can
+also be configured to list object versions with the [`s3Versions`
+parameter](#s3versions).
+
+
+
+### S3 probe metrics
+
+The following sub-headings document the metrics provided by the S3 probe.
+
+#### `s3FirstObjectModificationDate`
+
+**Type:** datetime
+
+The modification date of the earliest modified object.
+
+```json
+{
+  "description": "...",
+  "name": "s3FirstObjectModificationDate",
+  "tags": {},
+  "type": "datetime",
+  "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3FirstObjectVersionModificationDate`
+
+**Type:** datetime
+
+The modification date of the earliest modified object version.
+
+**Note:** this metric will only be provided if the [`s3Versions` parameter] is
+set to `true`.
+
+```json
+{
+  "description": "...",
+  "name": "s3FirstObjectVersionModificationDate",
+  "tags": {},
+  "type": "datetime",
+  "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3LargestObjectSize`
+
+**Type:** bytes
+
+The size of the largest object in bytes.
+
+```json
+{
+  "description": "...",
+  "name": "s3LargestObjectSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 18392047
+}
+```
+
+#### `s3LastObjectModificationDate`
+
+**Type:** datetime
+
+The modification date of the most recently modified object.
+
+```json
+{
+  "description": "...",
+  "name": "s3LastObjectModificationDate",
+  "tags": {},
+  "type": "datetime",
+  "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3LastObjectVersionModificationDate`
+
+**Type:** datetime
+
+The modification date of the most recently modified object version.
+
+**Note:** this metric will only be provided if the [`s3Versions` parameter] is
+set to `true`.
+
+```json
+{
+  "description": "...",
+  "name": "s3LastObjectVersionModificationDate",
+  "tags": {},
+  "type": "datetime",
+  "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3ObjectsCount`
+
+**Type:** quantity
+
+Number of objects.
+
+```json
+{
+  "description": "...",
+  "name": "s3ObjectsCount",
+  "tags": {},
+  "type": "quantity",
+  "value": 23
+}
+```
+
+#### `s3ObjectsTotalSize`
+
+**Type:** bytes
+
+Total size of objects.
+
+```json
+{
+  "description": "...",
+  "name": "s3ObjectsTotalSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 4027329041
+}
+```
+
+#### `s3ObjectVersionsCount`
+
+**Type:** quantity
+
+Number of object versions.
+
+**Note:** this metric will only be provided if the [`s3Versions` parameter] is
+set to `true`.
+
+```json
+{
+  "description": "...",
+  "name": "s3ObjectVersionsCount",
+  "tags": {},
+  "type": "quantity",
+  "value": 32
+}
+```
+
+#### `s3SmallestObjectSize`
+
+**Type:** bytes
+
+The size of the smallest object in bytes.
+
+```json
+{
+  "description": "...",
+  "name": "s3SmallestObjectSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 351
+}
+```
+
+
+
+### S3 probe parameters
+
+The following sub-headings document URL query parameters that can be provided to
+customize the behavior of the S3 probe.
+
+#### `s3ByPrefix`
+
+**Type:** string, **Repeatable**
+
+When provided `N` times, this parameter will cause each metric to be provided `N +
+1` times in the response:
+
+* Once for each prefix (`N`)
+* Once for no prefix (`+ 1`)
+
+```
+?s3ByPrefix=daily&s3ByPrefix=monthly
+```
+
+For example, if the parameter is provided twice with the values `daily` and
+`monthly` like in the example above, the `s3ObjectsTotalSize` metric will be
+present twice (as will all other metrics of the S3 probe). Those separate metric
+objects can be differentiated by their `tags` property:
+
+```json
+{
+  "description": "...",
+  "name": "s3ObjectsTotalSize",
+  "tags": {
+    "prefix": ""
+  },
+  "type": "bytes",
+  "value": 4027329041
+},
+{
+  "description": "...",
+  "name": "s3ObjectsTotalSize",
+  "tags": {
+    "prefix": "daily"
+  },
+  "type": "bytes",
+  "value": 230918
+},
+{
+  "description": "...",
+  "name": "s3ObjectsTotalSize",
+  "tags": {
+    "prefix": "monthly"
+  },
+  "type": "bytes",
+  "value": 2507812
+}
+```
+
+#### `s3Versions`
+
+**Type:** boolean, **Default:** `false`
+
+Whether to list objects versions in the bucket and generate metrics for them.
+
+```
+?s3Versions=true
 ```
 
 
