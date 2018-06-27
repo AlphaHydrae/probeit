@@ -183,8 +183,10 @@ function validateHttpRedirects(ctx, state, failures) {
     });
   } else if (shouldRedirect === false && state.redirects) {
     return failures.push({
+      actual: state.redirects,
       cause: 'unexpectedHttpRedirect',
-      description: 'Did not expect the server to send an HTTP redirection'
+      description: 'Did not expect the server to send an HTTP redirection',
+      expected: 0
     });
   }
 }
@@ -211,7 +213,7 @@ function validateHttpResponseBody(ctx, res, failures) {
 
   const body = String(res.body);
 
-  for (const expectedMatch of toArray(ctx.query.expectMatch)) {
+  for (const expectedMatch of toArray(ctx.query.expectHttpResponseBodyMatch)) {
     if (!body.match(new RegExp(expectedMatch))) {
       failures.push({
         cause: 'httpResponseBodyMismatch',
@@ -221,9 +223,11 @@ function validateHttpResponseBody(ctx, res, failures) {
     }
   }
 
-  for (const expectedMismatch of toArray(ctx.query.expectMismatch)) {
-    if (body.match(new RegExp(expectedMismatch))) {
+  for (const expectedMismatch of toArray(ctx.query.expectHttpResponseBodyMismatch)) {
+    const match = body.match(new RegExp(expectedMismatch));
+    if (match) {
       failures.push({
+        actual: match[0],
         cause: 'unexpectedHttpResponseBodyMatch',
         description: `Did not expect the HTTP response body to match the following regular expression: ${expectedMismatch}`,
         expected: expectedMismatch
@@ -233,15 +237,15 @@ function validateHttpResponseBody(ctx, res, failures) {
 }
 
 function validateHttpSecurity(ctx, state, failures) {
-  const expectSecure = parseBooleanQueryParam(last(toArray(ctx.query.expectSecure)), null);
+  const expectSecure = parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null);
   if (expectSecure === true && state.tlsHandshake === undefined) {
     failures.push({
-      cause: 'insecure',
+      cause: 'insecureHttp',
       description: 'Expected the server to use SSL/TLS for the request (or final redirect)'
     });
   } else if (expectSecure === false && state.tlsHandshake !== undefined) {
     failures.push({
-      cause: 'unexpectedlySecure',
+      cause: 'unexpectedlySecureHttp',
       description: 'Did not expect the server to use SSL/TLS for the request (or final redirect)'
     });
   }
@@ -250,7 +254,7 @@ function validateHttpSecurity(ctx, state, failures) {
 function validateHttpStatusCode(ctx, res, failures) {
 
   const actual = res.statusCode;
-  const expected = isArray(ctx.query.expectedHttpStatusCode) ? ctx.query.expectedHttpStatusCode : compact([ ctx.query.expectedHttpStatusCode ]);
+  const expected = isArray(ctx.query.expectHttpStatusCode) ? ctx.query.expectHttpStatusCode : compact([ ctx.query.expectHttpStatusCode ]);
   if (!expected.length) {
     expected.push('2xx', '3xx');
   }
@@ -278,17 +282,19 @@ function validateHttpStatusCode(ctx, res, failures) {
     actual: res.statusCode,
     cause: 'invalidHttpStatusCode',
     description: `Expected HTTP status code to match one of the following: ${expected.join(', ')}`,
-    expected: toArray(ctx.query.expectedHttpStatusCode)
+    expected: toArray(ctx.query.expectHttpStatusCode)
   });
 }
 
 function validateHttpVersion(ctx, res, failures) {
   const actual = res.httpVersion;
-  const expected = ctx.query.expectedHttpVersion;
+  const expected = ctx.query.expectHttpVersion;
   if (expected && String(actual) !== String(expected)) {
     failures.push({
+      actual,
       cause: 'invalidHttpVersion',
-      description: `Expected HTTP version to be "${expected}"`
+      description: `Expected HTTP version to be "${expected}"`,
+      expected: parseFloat(expected)
     });
   }
 }
