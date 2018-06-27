@@ -295,7 +295,9 @@ customize the behavior of the HTTP probe.
 Whether to consider an HTTP response with an invalid SSL certificate as a
 success.
 
-    ?allowUnauthorized=true
+```
+?allowUnauthorized=true
+```
 
 #### `followRedirects`
 
@@ -305,7 +307,9 @@ Whether the probe will follow redirects (e.g. HTTP 301 Moved Permanently or HTTP
 302 Found) to provide metrics about the final response, or whether it will
 simply provide metrics about the first response sent by the server.
 
-    ?followRedirects=false
+```
+?followRedirects=false
+```
 
 #### `method`
 
@@ -313,7 +317,9 @@ simply provide metrics about the first response sent by the server.
 
 The HTTP method to use for the request on the target URL. `GET` by default.
 
-    ?method=POST
+```
+?method=POST
+```
 
 #### `header`
 
@@ -322,8 +328,10 @@ The HTTP method to use for the request on the target URL. `GET` by default.
 HTTP header to add to the probe's request(s). This parameter can be repeated to
 set multiple headers.
 
-    // The value is "Authorization=Basic YWRtaW46Y2hhbmdlbWUh", URL-encoded
-    ?header=Authorization%3DBasic%20YWRtaW46Y2hhbmdlbWUh
+```
+// The value is "Authorization=Basic YWRtaW46Y2hhbmdlbWUh", URL-encoded
+?header=Authorization%3DBasic%20YWRtaW46Y2hhbmdlbWUh
+```
 
 
 
@@ -345,8 +353,10 @@ For the probe to be considered successful with this parameter:
 * If `false`, no redirect must have been followed.
 * If an integer, exactly that number of redirects must have been followed.
 
-    ?expectHttpRedirects=true
-    ?expectHttpRedirects=2
+```
+?expectHttpRedirects=true
+?expectHttpRedirects=2
+```
 
 #### `expectHttpRedirectTo`
 
@@ -359,8 +369,10 @@ For the probe to be considered successful with this parameter:
   to the specified URL. (Other parts of the URL, such as authentication, query
   string or hash, are ignored for the comparison.)
 
-    // The value is "http://example.com/path", URL-encoded
-    ?expectHttpRedirectTo=http%3A%2F%2Fexample.com%2Fpath
+```
+// The value is "http://example.com/path", URL-encoded
+?expectHttpRedirectTo=http%3A%2F%2Fexample.com%2Fpath
+```
 
 #### `expectHttpResponseBodyMatch`
 
@@ -371,8 +383,10 @@ body must match the regular expression.
 
 This parameter can be repeated to check the presence of multiple patterns.
 
-    // The value is "Catch \d{2}", URL-encoded
-    ?expectHttpResponseBodyMatch=Catch%20%5Cd%7B2%7D
+```
+// The value is "Catch \d{2}", URL-encoded
+?expectHttpResponseBodyMatch=Catch%20%5Cd%7B2%7D
+```
 
 #### `expectHttpResponseBodyMismatch`
 
@@ -383,8 +397,10 @@ body must **not** match the regular expression.
 
 This parameter can be repeated to check the absence of multiple patterns.
 
-    // The value is "connection lost", URL-encoded
-    ?expectHttpResponseBodyMismatch=connection+lost
+```
+// The value is "connection lost", URL-encoded
+?expectHttpResponseBodyMismatch=connection+lost
+```
 
 #### `expectHttpSecure`
 
@@ -402,7 +418,9 @@ Note that this does not affect the probe's behavior of failing if an SSL
 certificate is invalid. Use the [`allowUnauthorized`
 parameter](#allowUnauthorized) for that.
 
-    ?expectHttpSecure=true
+```
+?expectHttpSecure=true
+```
 
 #### `expectHttpStatusCode`
 
@@ -413,8 +431,10 @@ response's status code must be one of the expected codes, or fall within one of
 the expected classes (e.g. `204` falls within the `2xx` class). Both individual
 codes and code classes may be provided.
 
-    ?expectHttpStatusCode=204
-    ?expectHttpStatusCode=200&expectHttpStatusCode=3xx
+```
+?expectHttpStatusCode=204
+?expectHttpStatusCode=200&expectHttpStatusCode=3xx
+```
 
 #### `expectHttpVersion`
 
@@ -423,7 +443,9 @@ codes and code classes may be provided.
 For the probe to be considered successful with this parameter, the HTTP version
 of the final response must match the expected version.
 
-    ?expectHttpVersion=1.1
+```
+?expectHttpVersion=1.1
+```
 
 
 
