@@ -1,10 +1,10 @@
 const http = require('http');
 const https = require('https');
-const { compact, isArray, isNaN, last, mapValues, pick } = require('lodash');
+const { compact, each, isArray, isNaN, last, pick } = require('lodash');
 const moment = require('moment');
 const url = require('url');
 
-const { buildMapMetric, buildMetric, increase, parseBooleanQueryParam, parseHttpParamsQueryParam, toArray } = require('../utils');
+const { buildMetric, increase, parseBooleanQueryParam, parseHttpParamsQueryParam, toArray } = require('../utils');
 
 exports.probeHttp = function(target, ctx, state = {}) {
   return new Promise(resolve => {
@@ -87,6 +87,7 @@ exports.probeHttp = function(target, ctx, state = {}) {
 function getHttpMetrics(ctx, req, res, state) {
 
   const failures = [];
+  const metrics = [];
 
   if (res) {
     validateHttpRedirects(ctx, state, failures);
@@ -97,47 +98,62 @@ function getHttpMetrics(ctx, req, res, state) {
     validateHttpVersion(ctx, res, failures);
   }
 
-  return {
-    failures,
-    httpContentLength: buildMetric(
-      res && res.headers['content-length'] ? parseInt(res.headers['content-length'], 10) : null,
-      'bytes',
-      'Length of the HTTP response entity in bytes'
-    ),
-    httpDuration: buildMapMetric(
-      mapValues(pick(state, 'contentTransfer', 'dnsLookup', 'firstByte', 'tcpConnection', 'tlsHandshake'), value => value / 1000),
-      'phase',
+  const success = !!res && !failures.length;
+
+  metrics.push(buildMetric(
+    'httpContentLength',
+    'bytes',
+    res && res.headers['content-length'] ? parseInt(res.headers['content-length'], 10) : null,
+    'Length of the HTTP response entity in bytes',
+  ));
+
+  each(pick(state, 'contentTransfer', 'dnsLookup', 'firstByte', 'tcpConnection', 'tlsHandshake'), (value, phase) => {
+    metrics.push(buildMetric(
+      'httpDuration',
       'seconds',
-      'Duration of the HTTP request(s) by phase, summed over all redirects, in seconds'
-    ),
-    httpRedirects: buildMetric(
-      state.redirects || 0,
-      'quantity',
-      'Number of redirects'
-    ),
-    httpSecure: buildMetric(
-      // FIXME: check whether SSL/TLS is used on final redirect (currently works at any redirect)
-      state.tlsHandshake !== undefined,
-      'boolean',
-      'Indicates whether SSL/TLS was used for the final redirect'
-    ),
-    httpCertificateExpiry: buildMetric(
-      getHttpCertificateExpiry(req),
-      'datetime',
-      'Expiration date of the SSL certificate in Unix time'
-    ),
-    httpStatusCode: buildMetric(
-      res ? res.statusCode : null,
-      'number',
-      'HTTP status code'
-    ),
-    httpVersion: buildMetric(
-      res ? res.httpVersion : null,
-      'number',
-      'HTTP version'
-    ),
-    success: !!res && !failures.length
-  };
+      value / 1000,
+      'Duration of the HTTP request(s) by phase, summed over all redirects, in seconds',
+      { phase }
+    ));
+  });
+
+  metrics.push(buildMetric(
+    'httpRedirects',
+    'quantity',
+    state.redirects || 0,
+    'Number of redirects'
+  ));
+
+  metrics.push(buildMetric(
+    'httpSecure',
+    'boolean',
+    // FIXME: check whether SSL/TLS is used on final redirect (currently works at any redirect)
+    state.tlsHandshake !== undefined,
+    'Indicates whether SSL/TLS was used for the final redirect'
+  ));
+
+  metrics.push(buildMetric(
+    'httpCertificateExpiry',
+    'datetime',
+    getHttpCertificateExpiry(req),
+    'Expiration date of the SSL certificate in Unix time'
+  ));
+
+  metrics.push(buildMetric(
+    'httpStatusCode',
+    'number',
+    res ? res.statusCode : null,
+    'HTTP status code'
+  ));
+
+  metrics.push(buildMetric(
+    'httpVersion',
+    'number',
+    res ? res.httpVersion : null,
+    'HTTP version of the response'
+  ));
+
+  return { failures, metrics, success };
 }
 
 function validateHttpRedirects(ctx, state, failures) {

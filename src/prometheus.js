@@ -1,58 +1,59 @@
 const { underscore } = require('inflection');
-const { each, includes, isPlainObject, pickBy, reduce } = require('lodash');
+const { each, includes, reduce } = require('lodash');
 const moment = require('moment');
 
 const { parseBooleanQueryParam } = require('./utils');
 
-exports.toPrometheusMetrics = function(metrics, ctx) {
+const SUFFIX_TYPES = [ 'bytes', 'seconds' ];
+
+exports.toPrometheusMetrics = function(result, ctx) {
 
   const pretty = parseBooleanQueryParam(ctx.query.pretty);
 
-  const lines = reduce(pickBy(metrics, metric => isPlainObject(metric) && includes([ 'boolean', 'bytes', 'datetime', 'number', 'quantity', 'seconds' ], metric.type)), (memo, metric, key) => {
+  let previousMetricName;
+  let currentMetricName;
+  const lines = [];
 
-    if (pretty && memo.length) {
-      memo.push('');
+  for (const metric of result.metrics) {
+
+    currentMetricName = metric.name;
+    if (previousMetricName && currentMetricName.localeCompare(previousMetricName) < 0) {
+      throw new Error('Metrics must be sorted by name');
     }
 
-    let metricKey = [ 'probe', underscore(key) ].join('_');
-    memo.push(`# HELP ${metricKey} ${metric.description}`);
+    let metricKey = [ 'probe', underscore(metric.name) ].join('_');
+    if (includes(SUFFIX_TYPES, metric.type)) {
+      metricKey = `${metricKey}_${metric.type}`;
+    }
 
-    if (metric.type === 'boolean') {
-      memo.push(`# TYPE ${metricKey} gauge`);
-      memo.push(`${metricKey} ${metric.value ? 1 : 0}`);
-    } else if (metric.type === 'datetime') {
-      memo.push(`# TYPE ${metricKey} gauge`);
-      memo.push(`${metricKey} ${metric.value ? moment(metric.value).unix() : -1}`);
-    } else if (includes([ 'bytes', 'number', 'quantity', 'seconds' ], metric.type)) {
-      if (metric.type === 'seconds') {
-        metricKey = `${metricKey}_seconds`;
+    if (currentMetricName !== previousMetricName) {
+      if (pretty) {
+        lines.push('');
       }
 
-      memo.push(`# TYPE ${metricKey} gauge`);
-      memo.push(`${metricKey} ${metric.value !== null ? metric.value : -1}`);
+      lines.push(`# HELP ${metricKey} ${metric.description}`);
+      lines.push(`# TYPE ${metricKey} gauge`);
     }
 
-    return memo;
-  }, []);
-
-  each(pickBy(metrics, metric => isPlainObject(metric) && metric.type === 'map' && includes([ 'bytes', 'number', 'quantity', 'seconds' ], metric.mapType)), (metric, key) => {
-
-    if (pretty && lines.length) {
-      lines.push('');
+    const metricKeyTags = reduce(metric.tags, (memo, value, key) => [ ...memo, `${key}="${value}"` ], []).join(',');
+    if (metricKeyTags.length) {
+      metricKey = `${metricKey}{${metricKeyTags}}`;
     }
 
-    let metricKey = [ 'probe', underscore(key) ].join('_');
-    if (metric.mapType === 'seconds') {
-      metricKey = `${metricKey}_seconds`;
+    if (metric.type === 'boolean') {
+      lines.push(`${metricKey} ${metric.value ? 1 : 0}`);
+    } else if (metric.type === 'datetime') {
+      lines.push(`${metricKey} ${metric.value ? moment(metric.value).unix() : -1}`);
+    } else if (includes([ 'bytes', 'quantity', 'seconds' ], metric.type)) {
+      lines.push(`${metricKey} ${metric.value !== null ? metric.value : -1}`);
+    } else if (includes([ 'number' ], metric.type)) {
+      lines.push(`${metricKey} ${metric.value !== null ? metric.value : 'NaN'}`);
+    } else {
+      throw new Error(`Conversion to Prometheus metrics not supported for values of type "${metric.type}"`);
     }
 
-    lines.push(`# HELP ${metricKey} ${metric.description}`);
-    lines.push(`# TYPE ${metricKey} gauge`);
-
-    each(metric.value, (mapValue, mapKey) => {
-      lines.push(`${metricKey}{${metric.mapKey || 'key'}="${mapKey}"} ${mapValue}`);
-    });
-  });
+    previousMetricName = metric.name;
+  }
 
   if (pretty) {
     lines.push('');
@@ -61,11 +62,11 @@ exports.toPrometheusMetrics = function(metrics, ctx) {
   lines.push('# HELP probe_failures Indicates the number of expectations that failed');
   lines.push('# TYPE probe_failures gauge');
 
-  if (!metrics.failures.length) {
+  if (!result.failures.length) {
     lines.push('probe_failures 0');
   }
 
-  const failureCountsByCause = metrics.failures.reduce((memo, failure) => ({ ...memo, [failure.cause]: (memo[failure.cause] || 0) + 1 }), {});
+  const failureCountsByCause = result.failures.reduce((memo, failure) => ({ ...memo, [failure.cause]: (memo[failure.cause] || 0) + 1 }), {});
   each(failureCountsByCause, (value, key) => {
     lines.push(`probe_failures{cause="${key}"} ${value}`);
   });
@@ -76,7 +77,7 @@ exports.toPrometheusMetrics = function(metrics, ctx) {
 
   lines.push('# HELP probe_success Indicates whether the probe was successful');
   lines.push('# TYPE probe_success gauge');
-  lines.push(`probe_success ${metrics.success ? 1 : 0}`);
+  lines.push(`probe_success ${result.success ? 1 : 0}`);
 
   return lines.join('\n');
 };
