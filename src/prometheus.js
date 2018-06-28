@@ -2,13 +2,9 @@ const { underscore } = require('inflection');
 const { each, includes, reduce } = require('lodash');
 const moment = require('moment');
 
-const { parseBooleanQueryParam } = require('./utils');
-
 const SUFFIX_TYPES = [ 'bytes', 'seconds' ];
 
-exports.toPrometheusMetrics = function(result, ctx) {
-
-  const pretty = parseBooleanQueryParam(ctx.query.pretty);
+exports.toPrometheusMetrics = function(result, pretty) {
 
   let previousMetricName;
   let currentMetricName;

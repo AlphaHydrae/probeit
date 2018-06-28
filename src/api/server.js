@@ -3,7 +3,7 @@ const { includes } = require('lodash');
 
 const { probe } = require('../probe');
 const { toPrometheusMetrics } = require('../prometheus');
-const { parseBooleanQueryParam } = require('../utils');
+const { parseBooleanParam } = require('../utils');
 
 exports.start = function(config) {
 
@@ -21,12 +21,13 @@ exports.start = function(config) {
       ctx.throw(400, 'Query parameter "target" is missing');
     }
 
+    const pretty = parseBooleanParam(ctx.query.pretty, config.pretty);
     const result = await probe(target, config, ctx);
 
     if (ctx.path === '/metrics') {
-      ctx.body = toPrometheusMetrics(result, ctx);
+      ctx.body = toPrometheusMetrics(result, pretty);
       ctx.set('Content-Type', 'text/plain; version=0.0.4');
-    } else if (parseBooleanQueryParam(ctx.query.pretty)) {
+    } else if (pretty) {
       ctx.body = JSON.stringify(result, undefined, 2);
       ctx.set('Content-Type', 'application/json; charset=utf-8');
     } else {

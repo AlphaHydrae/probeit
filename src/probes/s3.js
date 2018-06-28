@@ -1,10 +1,16 @@
 const aws = require('aws-sdk');
-const { assign, last, merge } = require('lodash');
+const { assign, last, merge, pick } = require('lodash');
 const moment = require('moment');
 const { parse: parseUrl } = require('url');
 
 const { getPresetOptions } = require('../presets');
-const { buildMetric, parseBooleanQueryParam, promisified, toArray } = require('../utils');
+const { buildMetric, parseBooleanParam, promisified, toArray } = require('../utils');
+
+const optionNames = [
+  'awsAccessKeyId', 'awsSecretAccessKey',
+  's3AccessKeyId', 's3SecretAccessKey',
+  's3ByPrefix', 's3Versions'
+];
 
 exports.getS3ProbeOptions = async function(target, config, ctx) {
 
@@ -21,7 +27,7 @@ exports.getS3ProbeOptions = async function(target, config, ctx) {
       s3AccessKeyId: last(toArray(ctx.query.awsAccessKeyId)),
       s3SecretAccessKey: last(toArray(ctx.query.awsSecretAccessKey)),
       s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(prefix => String(prefix)),
-      s3Versions: parseBooleanQueryParam(last(toArray(ctx.query.s3Versions)))
+      s3Versions: parseBooleanParam(last(toArray(ctx.query.s3Versions)))
     });
   }
 
@@ -32,6 +38,8 @@ exports.getS3ProbeOptions = async function(target, config, ctx) {
 
   const presetOptions = await getPresetOptions(config, selectedPresets);
 
+  const configOptions = pick(config, ...optionNames);
+
   const defaultOptions = {
     s3AccessKeyId: config.awsAccessKeyId,
     s3ByPrefix: [],
@@ -39,7 +47,7 @@ exports.getS3ProbeOptions = async function(target, config, ctx) {
   };
 
   // TODO: validate
-  return merge({}, defaultOptions, presetOptions, queryOptions, targetOptions);
+  return merge({}, defaultOptions, configOptions, presetOptions, queryOptions, targetOptions);
 };
 
 exports.probeS3 = async function(target, options) {

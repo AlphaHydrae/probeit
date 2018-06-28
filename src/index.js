@@ -14,15 +14,11 @@ exports.parseArgs = parseArgs;
 
 exports.run = async function() {
 
-  const args = parseArgs();
-  if (args._.length >= 2) {
-    throw new Error('This program only accepts zero or one argument');
-  }
+  const options = parseArgs();
+  const config = await loadConfig(options);
 
-  const config = await loadConfig(args);
-
-  if (args._.length === 1) {
-    await probeCli(args._[0], config);
+  if (options.target) {
+    await probeCli(options.target, config);
   } else {
     await startServer(config);
   }

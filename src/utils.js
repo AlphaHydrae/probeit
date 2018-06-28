@@ -97,11 +97,11 @@ exports.loadConfig = async function(file) {
   }
 };
 
-exports.parseBooleanQueryParam = function(value, defaultValue = false) {
+exports.parseBooleanParam = function(value, defaultValue = false) {
   return typeof value === 'string' ? !!value.match(/^1|y|yes|t|true$/i) : defaultValue;
 };
 
-exports.parseHttpParamsQueryParam = function(value, defaultValue = {}) {
+exports.parseHttpParams = function(value, defaultValue = {}) {
 
   const params = {};
 

@@ -397,16 +397,6 @@ simply provide metrics about the first response sent by the server.
 ?followRedirects=false
 ```
 
-#### `method`
-
-**Type:** string (`GET`, `POST`, `PUT`, etc.), **Default:** `GET`
-
-The HTTP method to use for the request on the target URL. `GET` by default.
-
-```
-?method=POST
-```
-
 #### `header`
 
 **Type:** `key=value` pair, **Repeatable**
@@ -417,6 +407,16 @@ set multiple headers.
 ```
 // The value is "Authorization=Basic YWRtaW46Y2hhbmdlbWUh", URL-encoded
 ?header=Authorization%3DBasic%20YWRtaW46Y2hhbmdlbWUh
+```
+
+#### `method`
+
+**Type:** string (`GET`, `POST`, `PUT`, etc.), **Default:** `GET`
+
+The HTTP method to use for the request on the target URL. `GET` by default.
+
+```
+?method=POST
 ```
 
 

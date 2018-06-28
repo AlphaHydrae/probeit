@@ -5,23 +5,32 @@ const moment = require('moment');
 const url = require('url');
 
 const { getPresetOptions } = require('../presets');
-const { buildMetric, increase, parseBooleanQueryParam, parseHttpParamsQueryParam, toArray } = require('../utils');
+const { buildMetric, increase, parseBooleanParam, parseHttpParams, toArray } = require('../utils');
+
+const optionNames = [
+  // Parameters
+  'allowUnauthorized', 'followRedirects', 'headers', 'method',
+  // Expectations
+  'expectHttpRedirects', 'expectHttpRedirectTo',
+  'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
+  'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion'
+];
 
 exports.getHttpProbeOptions = async function(target, config, ctx) {
 
   const queryOptions = {};
   if (ctx) {
     assign(queryOptions, {
-      allowUnauthorized: parseBooleanQueryParam(last(toArray(ctx.query.allowUnauthorized))),
+      allowUnauthorized: parseBooleanParam(last(toArray(ctx.query.allowUnauthorized))),
       expectHttpRedirects: last(toArray(ctx.query.expectHttpRedirects)),
       expectHttpRedirectTo: last(toArray(ctx.query.expectHttpRedirectTo)),
       expectHttpResponseBodyMatch: toArray(ctx.query.expectHttpResponseBodyMatch),
       expectHttpResponseBodyMismatch: toArray(ctx.query.expectHttpResponseBodyMismatch),
-      expectHttpSecure: parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null),
+      expectHttpSecure: parseBooleanParam(last(toArray(ctx.query.expectHttpSecure)), null),
       expectHttpStatusCode: toArray(ctx.query.expectHttpStatusCode),
       expectHttpVersion: last(toArray(ctx.query.expectHttpVersion)),
-      followRedirects: parseBooleanQueryParam(last(toArray(ctx.query.followRedirects))),
-      headers: parseHttpParamsQueryParam(ctx.query.header),
+      followRedirects: parseBooleanParam(last(toArray(ctx.query.followRedirects))),
+      headers: parseHttpParams(ctx.query.header),
       method: last(toArray(ctx.query.method))
     });
   }
@@ -32,6 +41,8 @@ exports.getHttpProbeOptions = async function(target, config, ctx) {
   }
 
   const presetOptions = await getPresetOptions(config, selectedPresets);
+
+  const configOptions = pick(config, ...optionNames);
 
   const defaultOptions = {
     allowUnauthorized: false,
@@ -45,7 +56,7 @@ exports.getHttpProbeOptions = async function(target, config, ctx) {
   };
 
   // TODO: validate
-  return merge({}, defaultOptions, presetOptions, queryOptions);
+  return merge({}, defaultOptions, configOptions, presetOptions, queryOptions);
 };
 
 exports.probeHttp = async function(target, options) {
@@ -215,7 +226,7 @@ function validateHttpRedirects(state, failures, options) {
     });
   }
 
-  const shouldRedirect = parseBooleanQueryParam(expectedRedirects, null);
+  const shouldRedirect = parseBooleanParam(expectedRedirects, null);
   if (shouldRedirect === true && !state.redirects) {
     return failures.push({
       cause: 'missingHttpRedirect',

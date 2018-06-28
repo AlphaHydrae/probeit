@@ -1,12 +1,12 @@
 const { readFile } = require('fs-extra');
-const { has, isInteger, merge } = require('lodash');
+const { has, isInteger, merge, pick } = require('lodash');
 const log4js = require('log4js');
 
 const { loadConfig } = require('./utils');
 
-const defaultConfigFile = 'config.json';
+const defaultConfigFile = 'config.yml';
 
-exports.load = async function(fromArgs) {
+exports.load = async function(options = {}) {
 
   const fromEnvironment = {
     awsAccessKeyId: firstResolvedValue(getEnv('PROBE_AWS_ACCESS_KEY_ID'), getEnv('AWS_ACCESS_KEY_ID')),
@@ -18,7 +18,7 @@ exports.load = async function(fromArgs) {
     pretty: getEnv('PROBE_PRETTY')
   };
 
-  const fromFilePromise = loadConfigFile(fromArgs.config || await fromEnvironment.config || defaultConfigFile, !fromArgs.config && !fromEnvironment.config);
+  const fromFilePromise = loadConfigFile(options.config || await fromEnvironment.config || defaultConfigFile, !options.config && !fromEnvironment.config);
 
   const fromEnvironmentKeys = Object.keys(fromEnvironment);
   const fromEnvironmentValues = fromEnvironmentKeys.map(k => fromEnvironment[k]);
@@ -41,13 +41,15 @@ exports.load = async function(fromArgs) {
     validateConfig(defaults, false),
     validateConfig(fromFile, false),
     validateConfig(fromEnvironment, false),
-    validateConfig(fromArgs, false)
+    validateConfig(options, false)
   ));
 
   config.getLogger = createLoggerFactory(config);
 
   return config;
 };
+
+exports.whitelist = whitelistConfig;
 
 function createLoggerFactory(config) {
   return function(name) {
@@ -103,4 +105,20 @@ async function parseConfigInt(value, defaultValue) {
 
 function validateConfig(config) {
   return config;
+}
+
+function whitelistConfig(config) {
+  return pick(
+    config,
+    // General options
+    'awsAccessKeyId', 'awsSecretAccessKey', 'config', 'logLevel', 'port', 'presets', 'pretty',
+    // HTTP probe parameters
+    'allowUnauthorized', 'followRedirects', 'headers', 'method',
+    // HTTP probe expectations
+    'expectHttpRedirects', 'expectHttpRedirectTo',
+    'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
+    'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion',
+    // S3 probe parameters
+    's3AccessKeyId', 's3SecretAccessKey', 's3ByPrefix', 's3Versions'
+  );
 }
