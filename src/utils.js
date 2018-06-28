@@ -1,5 +1,8 @@
+const { readFile } = require('fs-extra');
+const yaml = require('js-yaml');
 const { has, isArray, isFinite, isInteger, isPlainObject, uniq, values } = require('lodash');
 const moment = require('moment');
+const { extname } = require('path');
 
 const METRIC_TYPES = {
   boolean: {
@@ -82,6 +85,16 @@ exports.compareMetrics = function(a, b) {
   }
 
   return 0;
+};
+
+exports.loadConfig = async function(file) {
+  if (file.match(/\.json$/)) {
+    return JSON.parse(await readFile(file, 'utf8'));
+  } else if (file.match(/\.ya?ml$/)) {
+    return yaml.safeLoad(await readFile(file, 'utf8'));
+  } else {
+    throw new Error(`Unknown config file extension "${extname(file)}"; must be ".json" or ".yml"`);
+  }
 };
 
 exports.parseBooleanQueryParam = function(value, defaultValue = false) {

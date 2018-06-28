@@ -1,23 +1,51 @@
 const http = require('http');
 const https = require('https');
-const { compact, each, isArray, isNaN, last, pick } = require('lodash');
+const { each, isNaN, last, merge, pick } = require('lodash');
 const moment = require('moment');
 const url = require('url');
 
 const { buildMetric, increase, parseBooleanQueryParam, parseHttpParamsQueryParam, toArray } = require('../utils');
 
-exports.probeHttp = function(target, ctx, state = {}) {
-  return new Promise(resolve => {
+exports.probeHttp = async function(target, ctx, presetOptions) {
 
-    const followRedirects = parseBooleanQueryParam(ctx.query.followRedirects, true);
+  const queryOptions = {
+    allowUnauthorized: parseBooleanQueryParam(last(toArray(ctx.query.allowUnauthorized))),
+    expectHttpRedirects: last(toArray(ctx.query.expectHttpRedirects)),
+    expectHttpRedirectTo: last(toArray(ctx.query.expectHttpRedirectTo)),
+    expectHttpResponseBodyMatch: toArray(ctx.query.expectHttpResponseBodyMatch),
+    expectHttpResponseBodyMismatch: toArray(ctx.query.expectHttpResponseBodyMismatch),
+    expectHttpSecure: parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null),
+    expectHttpStatusCode: toArray(ctx.query.expectHttpStatusCode),
+    expectHttpVersion: last(toArray(ctx.query.expectHttpVersion)),
+    followRedirects: parseBooleanQueryParam(last(toArray(ctx.query.followRedirects))),
+    headers: parseHttpParamsQueryParam(ctx.query.header),
+    method: last(toArray(ctx.query.method))
+  };
+
+  const defaultOptions = {
+    allowUnauthorized: false,
+    expectHttpRedirects: ctx.query.expectHttpRedirectTo ? 'yes' : undefined,
+    followRedirects: true,
+    method: 'GET'
+  };
+
+  // TODO: validate
+  const options = merge({}, defaultOptions, presetOptions, queryOptions);
+
+  const probeData = await performHttpProbe(target, options);
+  return getHttpMetrics(probeData.req, probeData.res, probeData.state, options);
+};
+
+function performHttpProbe(target, options, state = {}) {
+  return new Promise(resolve => {
 
     // TODO: support query parameters
     const reqOptions = {
-      method: ctx.query.method || 'GET',
+      method: options.method,
       ...url.parse(target),
       agent: false,
-      headers: parseHttpParamsQueryParam(ctx.query.header),
-      rejectUnauthorized: !parseBooleanQueryParam(ctx.query.allowUnauthorized)
+      headers: options.headers,
+      rejectUnauthorized: !options.allowUnauthorized
     };
 
     const times = {
@@ -50,11 +78,11 @@ exports.probeHttp = function(target, ctx, state = {}) {
           increase(state, 'contentTransfer', new Date().getTime() - times.firstByteAt);
         }
 
-        if (followRedirects && res.statusCode >= 301 && res.statusCode <= 302) {
+        if (options.followRedirects && res.statusCode >= 301 && res.statusCode <= 302) {
           increase(state, 'redirects', 1);
-          resolve(exports.probeHttp(res.headers.location, ctx, state));
+          resolve(performHttpProbe(res.headers.location, options, state));
         } else {
-          resolve(getHttpMetrics(ctx, req, Object.assign(res, { body }), state));
+          resolve({ req, res: Object.assign(res, { body }), state });
         }
       });
     });
@@ -77,25 +105,25 @@ exports.probeHttp = function(target, ctx, state = {}) {
     });
 
     req.on('error', () => {
-      resolve(getHttpMetrics(ctx, req, undefined, state));
+      resolve({ req, state });
     });
 
     req.end();
   });
-};
+}
 
-function getHttpMetrics(ctx, req, res, state) {
+function getHttpMetrics(req, res, state, options) {
 
   const failures = [];
   const metrics = [];
 
   if (res) {
-    validateHttpRedirects(ctx, state, failures);
-    validateHttpRedirectTarget(ctx, state, failures);
-    validateHttpResponseBody(ctx, res, failures);
-    validateHttpSecurity(ctx, state, failures);
-    validateHttpStatusCode(ctx, res, failures);
-    validateHttpVersion(ctx, res, failures);
+    validateHttpRedirects(state, failures, options);
+    validateHttpRedirectTarget(state, failures, options);
+    validateHttpResponseBody(res, failures, options);
+    validateHttpSecurity(state, failures, options);
+    validateHttpStatusCode(res, failures, options);
+    validateHttpVersion(res, failures, options);
   }
 
   const success = !!res && !failures.length;
@@ -156,14 +184,9 @@ function getHttpMetrics(ctx, req, res, state) {
   return { failures, metrics, success };
 }
 
-function validateHttpRedirects(ctx, state, failures) {
+function validateHttpRedirects(state, failures, options) {
 
-  let expectedRedirects;
-  if (ctx.query.expectHttpRedirects !== undefined) {
-    expectedRedirects = ctx.query.expectHttpRedirects;
-  } else if (ctx.query.expectHttpRedirectTo) {
-    expectedRedirects = 'yes';
-  }
+  const expectedRedirects = options.expectHttpRedirects;
 
   const expectedRedirectCount = Number(expectedRedirects);
   if (!isNaN(expectedRedirectCount) && state.redirects !== expectedRedirectCount) {
@@ -191,9 +214,9 @@ function validateHttpRedirects(ctx, state, failures) {
   }
 }
 
-function validateHttpRedirectTarget(ctx, state, failures) {
+function validateHttpRedirectTarget(state, failures, options) {
 
-  const expectedRedirect = ctx.query.expectHttpRedirectTo !== undefined ? url.parse(ctx.query.expectHttpRedirectTo) : undefined;
+  const expectedRedirect = options.expectHttpRedirectTo !== undefined ? url.parse(options.expectHttpRedirectTo) : undefined;
   if (!expectedRedirect) {
     return;
   }
@@ -203,17 +226,17 @@ function validateHttpRedirectTarget(ctx, state, failures) {
     failures.push({
       actual: url.format(lastRequest),
       cause: 'invalidHttpRedirectLocation',
-      description: `Expected the request to be redirected to ${ctx.query.expectHttpRedirectTo}`,
+      description: `Expected the request to be redirected to ${options.expectHttpRedirectTo}`,
       expected: url.format(expectedRedirect)
     });
   }
 }
 
-function validateHttpResponseBody(ctx, res, failures) {
+function validateHttpResponseBody(res, failures, options) {
 
   const body = String(res.body);
 
-  for (const expectedMatch of toArray(ctx.query.expectHttpResponseBodyMatch)) {
+  for (const expectedMatch of options.expectHttpResponseBodyMatch) {
     if (!body.match(new RegExp(expectedMatch))) {
       failures.push({
         cause: 'httpResponseBodyMismatch',
@@ -223,7 +246,7 @@ function validateHttpResponseBody(ctx, res, failures) {
     }
   }
 
-  for (const expectedMismatch of toArray(ctx.query.expectHttpResponseBodyMismatch)) {
+  for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
     const match = body.match(new RegExp(expectedMismatch));
     if (match) {
       failures.push({
@@ -236,8 +259,8 @@ function validateHttpResponseBody(ctx, res, failures) {
   }
 }
 
-function validateHttpSecurity(ctx, state, failures) {
-  const expectSecure = parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null);
+function validateHttpSecurity(state, failures, options) {
+  const expectSecure = options.expectHttpSecure;
   if (expectSecure === true && state.tlsHandshake === undefined) {
     failures.push({
       cause: 'insecureHttp',
@@ -251,10 +274,10 @@ function validateHttpSecurity(ctx, state, failures) {
   }
 }
 
-function validateHttpStatusCode(ctx, res, failures) {
+function validateHttpStatusCode(res, failures, options) {
 
   const actual = res.statusCode;
-  const expected = isArray(ctx.query.expectHttpStatusCode) ? ctx.query.expectHttpStatusCode : compact([ ctx.query.expectHttpStatusCode ]);
+  const expected = options.expectHttpStatusCode;
   if (!expected.length) {
     expected.push('2xx', '3xx');
   }
@@ -282,13 +305,13 @@ function validateHttpStatusCode(ctx, res, failures) {
     actual: res.statusCode,
     cause: 'invalidHttpStatusCode',
     description: `Expected HTTP status code to match one of the following: ${expected.join(', ')}`,
-    expected: toArray(ctx.query.expectHttpStatusCode)
+    expected: options.expectHttpStatusCode
   });
 }
 
-function validateHttpVersion(ctx, res, failures) {
+function validateHttpVersion(res, failures, options) {
   const actual = res.httpVersion;
-  const expected = ctx.query.expectHttpVersion;
+  const expected = options.expectHttpVersion;
   if (expected && String(actual) !== String(expected)) {
     failures.push({
       actual,

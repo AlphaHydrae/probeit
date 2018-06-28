@@ -1,35 +1,53 @@
 const aws = require('aws-sdk');
-const { last } = require('lodash');
+const { last, merge } = require('lodash');
 const moment = require('moment');
 const { parse: parseUrl } = require('url');
 
 const { buildMetric, parseBooleanQueryParam, promisified, toArray } = require('../utils');
 
-exports.probeS3 = async function(target, ctx) {
+exports.probeS3 = async function(target, ctx, presetOptions, config) {
 
   const s3Url = parseUrl(target);
 
   const Bucket = s3Url.host;
   const Prefix = s3Url.pathname;
 
-  const accessKeyId = s3Url.auth ? s3Url.auth.replace(/:.*/, '') : process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = s3Url.auth && s3Url.auth.match(/:.+/) ? s3Url.auth.replace(/[^:]+:/, '') : process.env.AWS_SECRET_ACCESS_KEY;
+  const targetOptions = {
+    s3AccessKeyId: s3Url.auth ? s3Url.auth.replace(/:.*/, '') : undefined,
+    s3SecretAccessKey: s3Url.auth && s3Url.auth.match(/:.+/) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
+  };
 
-  const s3 = new aws.S3({ accessKeyId, secretAccessKey });
+  const queryOptions = {
+    s3AccessKeyId: last(toArray(ctx.query.awsAccessKeyId)),
+    s3SecretAccessKey: last(toArray(ctx.query.awsSecretAccessKey)),
+    s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(prefix => String(prefix)),
+    s3Versions: parseBooleanQueryParam(last(toArray(ctx.query.s3Versions)))
+  };
+
+  const defaultOptions = {
+    s3AccessKeyId: config.awsAccessKeyId,
+    s3SecretAccessKey: config.awsSecretAccessKey
+  };
+
+  // TODO: validate
+  const options = merge({}, defaultOptions, presetOptions, queryOptions, targetOptions);
+
+  const s3 = new aws.S3({
+    accessKeyId: options.s3AccessKeyId,
+    secretAccessKey: options.s3SecretAccessKey
+  });
 
   const result = {
     failures: [],
     metrics: []
   };
 
-  const probeVersions = parseBooleanQueryParam(ctx.query.s3Versions);
-
   const objectsPromise = listAllObjects(s3, { Bucket, Prefix });
-  const versionsPromise = probeVersions ? listAllObjectVersions(s3, { Bucket, Prefix }) : Promise.resolve();
+  const versionsPromise = options.s3Versions ? listAllObjectVersions(s3, { Bucket, Prefix }) : Promise.resolve();
 
   const [ objects, versions ] = await Promise.all([ objectsPromise, versionsPromise ]);
 
-  const aggregationPrefixes = toArray(ctx.query.s3ByPrefix);
+  const aggregationPrefixes = options.s3ByPrefix;
   const globalTags = {};
 
   if (aggregationPrefixes.length) {
@@ -38,7 +56,7 @@ exports.probeS3 = async function(target, ctx) {
     for (const prefix of aggregationPrefixes) {
       const tags = { prefix };
       const matchingObjects = objects.filter(o => o.Key.indexOf(prefix) === 0);
-      const matchingVersions = probeVersions ? versions.filter(v => v.Key.indexOf(prefix) === 0) : undefined;
+      const matchingVersions = options.s3Versions ? versions.filter(v => v.Key.indexOf(prefix) === 0) : undefined;
       addS3Metrics(result.metrics, tags, matchingObjects, matchingVersions);
     }
   }
