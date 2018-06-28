@@ -1,14 +1,35 @@
 const glob = require('glob-promise');
-const { isPlainObject } = require('lodash');
+const { difference, isPlainObject, merge, pick, reduce } = require('lodash');
 
 const { loadConfig } = require('./utils');
 
+const LOADED_PRESETS = Symbol('loadedPresets');
+
+exports.getPresetOptions = async function(config, selectedPresets) {
+  if (!selectedPresets.length) {
+    return {};
+  }
+
+  const presets = await exports.load(config);
+
+  const unknownPresets = difference(selectedPresets, Object.keys(presets));
+  if (unknownPresets.length) {
+    throw new Error(`The following presets are not defined: ${unknownPresets.map(preset => `"${preset}"`).join(', ')}`);
+  }
+
+  return reduce(pick(presets, ...selectedPresets), (memo, preset) => merge(memo, preset), {});
+};
+
 exports.load = async function(config) {
+  if (!config[LOADED_PRESETS]) {
 
-  const matchingFiles = await glob(config.presets);
-  const presetObjects = await Promise.all(matchingFiles.map(loadPreset));
+    const matchingFiles = await glob(config.presets);
+    const presetObjects = await Promise.all(matchingFiles.map(loadPreset));
 
-  return presetObjects.reduce((memo, preset) => ({ ...memo, ...preset }), {});
+    config[LOADED_PRESETS] = presetObjects.reduce((memo, presets) => merge(memo, presets), {});
+  }
+
+  return config[LOADED_PRESETS];
 };
 
 function loadPreset(file) {

@@ -1,37 +1,54 @@
 const http = require('http');
 const https = require('https');
-const { each, isNaN, last, merge, pick } = require('lodash');
+const { assign, each, isNaN, last, merge, pick } = require('lodash');
 const moment = require('moment');
 const url = require('url');
 
+const { getPresetOptions } = require('../presets');
 const { buildMetric, increase, parseBooleanQueryParam, parseHttpParamsQueryParam, toArray } = require('../utils');
 
-exports.probeHttp = async function(target, ctx, presetOptions) {
+exports.getHttpProbeOptions = async function(target, config, ctx) {
 
-  const queryOptions = {
-    allowUnauthorized: parseBooleanQueryParam(last(toArray(ctx.query.allowUnauthorized))),
-    expectHttpRedirects: last(toArray(ctx.query.expectHttpRedirects)),
-    expectHttpRedirectTo: last(toArray(ctx.query.expectHttpRedirectTo)),
-    expectHttpResponseBodyMatch: toArray(ctx.query.expectHttpResponseBodyMatch),
-    expectHttpResponseBodyMismatch: toArray(ctx.query.expectHttpResponseBodyMismatch),
-    expectHttpSecure: parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null),
-    expectHttpStatusCode: toArray(ctx.query.expectHttpStatusCode),
-    expectHttpVersion: last(toArray(ctx.query.expectHttpVersion)),
-    followRedirects: parseBooleanQueryParam(last(toArray(ctx.query.followRedirects))),
-    headers: parseHttpParamsQueryParam(ctx.query.header),
-    method: last(toArray(ctx.query.method))
-  };
+  const queryOptions = {};
+  if (ctx) {
+    assign(queryOptions, {
+      allowUnauthorized: parseBooleanQueryParam(last(toArray(ctx.query.allowUnauthorized))),
+      expectHttpRedirects: last(toArray(ctx.query.expectHttpRedirects)),
+      expectHttpRedirectTo: last(toArray(ctx.query.expectHttpRedirectTo)),
+      expectHttpResponseBodyMatch: toArray(ctx.query.expectHttpResponseBodyMatch),
+      expectHttpResponseBodyMismatch: toArray(ctx.query.expectHttpResponseBodyMismatch),
+      expectHttpSecure: parseBooleanQueryParam(last(toArray(ctx.query.expectHttpSecure)), null),
+      expectHttpStatusCode: toArray(ctx.query.expectHttpStatusCode),
+      expectHttpVersion: last(toArray(ctx.query.expectHttpVersion)),
+      followRedirects: parseBooleanQueryParam(last(toArray(ctx.query.followRedirects))),
+      headers: parseHttpParamsQueryParam(ctx.query.header),
+      method: last(toArray(ctx.query.method))
+    });
+  }
+
+  const selectedPresets = [];
+  if (ctx) {
+    selectedPresets.push(...toArray(ctx.query.preset).map(preset => String(preset)));
+  }
+
+  const presetOptions = await getPresetOptions(config, selectedPresets);
 
   const defaultOptions = {
     allowUnauthorized: false,
-    expectHttpRedirects: ctx.query.expectHttpRedirectTo ? 'yes' : undefined,
+    expectHttpRedirects: ctx && ctx.query.expectHttpRedirectTo ? 'yes' : undefined,
+    expectHttpResponseBodyMatch: [],
+    expectHttpResponseBodyMismatch: [],
+    expectHttpStatusCode: [],
     followRedirects: true,
+    headers: {},
     method: 'GET'
   };
 
   // TODO: validate
-  const options = merge({}, defaultOptions, presetOptions, queryOptions);
+  return merge({}, defaultOptions, presetOptions, queryOptions);
+};
 
+exports.probeHttp = async function(target, options) {
   const probeData = await performHttpProbe(target, options);
   return getHttpMetrics(probeData.req, probeData.res, probeData.state, options);
 };

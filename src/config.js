@@ -14,7 +14,8 @@ exports.load = async function(fromArgs) {
     config: getEnv('PROBE_CONFIG'),
     logLevel: getEnv('PROBE_LOG_LEVEL'),
     port: firstResolvedValue(parseConfigInt(getEnv('PROBE_PORT')), parseConfigInt(getEnv('PORT'))),
-    presets: getEnv('PROBE_PRESETS')
+    presets: getEnv('PROBE_PRESETS'),
+    pretty: getEnv('PROBE_PRETTY')
   };
 
   const fromFilePromise = loadConfigFile(fromArgs.config || await fromEnvironment.config || defaultConfigFile, !fromArgs.config && !fromEnvironment.config);

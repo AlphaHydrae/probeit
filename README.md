@@ -1,13 +1,13 @@
-# Probe Server
+# Probe It
 
-Server that probes endpoints over HTTP & HTTPS and
-[AWS](https://aws.amazon.com) [S3](https://aws.amazon.com/s3/) buckets,
-producing metrics in JSON or for [Prometheus](https://prometheus.io).
+Probe HTTP URLs and [AWS](https://aws.amazon.com)
+[S3](https://aws.amazon.com/s3/) buckets to produce metrics in JSON or for
+[Prometheus](https://prometheus.io). Can be used on the command line or as a server.
 
 Inspired by [Prometheus Blackbox
 Exporter](https://github.com/prometheus/blackbox_exporter).
 
-[![npm version](https://badge.fury.io/js/probe-srv.svg)](https://badge.fury.io/js/probe-srv)
+[![npm version](https://badge.fury.io/js/probeit.svg)](https://badge.fury.io/js/probeit)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
@@ -76,7 +76,7 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
 ## Usage
 
 Visit
-[http://probe-srv.herokuapp.com/?target=http://google.com&pretty=true](http://probe-srv.herokuapp.com/?target=http://google.com&pretty=true)
+[http://probeit.herokuapp.com/?target=http://google.com&pretty=true](http://probeit.herokuapp.com/?target=http://google.com&pretty=true)
 for a sample probe of an HTTP endpoint.
 
 The `target` query parameter indicates what to probe:
@@ -117,20 +117,20 @@ The response will be a JSON object with:
 **Run it with [Docker](https://www.docker.com)**
 
 ```bash
-docker run -p 3000:3000 alphahydrae/probe-srv
+docker run -p 3000:3000 alphahydrae/probeit
 ```
 
 **Or, run it with [npx](https://github.com/zkat/npx)**
 
 ```bash
-npx probe-srv
+npx probeit
 ```
 
 **Or, install and run it manually**
 
 ```bash
-npm install -g probe-srv
-probe-srv
+npm install -g probeit
+probeit
 ```
 
 **Then, try it**
@@ -180,7 +180,7 @@ no objects).
 
 To get the metrics in [Prometheus](https://prometheus.io)'s text format, use the `/metrics` path:
 
-[http://probe-srv.herokuapp.com/metrics?target=http://google.com](http://probe-srv.herokuapp.com/metrics?target=http://google.com)
+[http://probeit.herokuapp.com/metrics?target=http://google.com](http://probeit.herokuapp.com/metrics?target=http://google.com)
 
 Metric names are converted from the JSON's camel-case format to **underscored
 format** and the **`probe_` prefix** is prepended (e.g.  `httpStatusCode`

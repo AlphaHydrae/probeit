@@ -1,36 +1,53 @@
 const aws = require('aws-sdk');
-const { last, merge } = require('lodash');
+const { assign, last, merge } = require('lodash');
 const moment = require('moment');
 const { parse: parseUrl } = require('url');
 
+const { getPresetOptions } = require('../presets');
 const { buildMetric, parseBooleanQueryParam, promisified, toArray } = require('../utils');
 
-exports.probeS3 = async function(target, ctx, presetOptions, config) {
+exports.getS3ProbeOptions = async function(target, config, ctx) {
 
   const s3Url = parseUrl(target);
-
-  const Bucket = s3Url.host;
-  const Prefix = s3Url.pathname;
 
   const targetOptions = {
     s3AccessKeyId: s3Url.auth ? s3Url.auth.replace(/:.*/, '') : undefined,
     s3SecretAccessKey: s3Url.auth && s3Url.auth.match(/:.+/) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
   };
 
-  const queryOptions = {
-    s3AccessKeyId: last(toArray(ctx.query.awsAccessKeyId)),
-    s3SecretAccessKey: last(toArray(ctx.query.awsSecretAccessKey)),
-    s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(prefix => String(prefix)),
-    s3Versions: parseBooleanQueryParam(last(toArray(ctx.query.s3Versions)))
-  };
+  const queryOptions = {};
+  if (ctx) {
+    assign(queryOptions, {
+      s3AccessKeyId: last(toArray(ctx.query.awsAccessKeyId)),
+      s3SecretAccessKey: last(toArray(ctx.query.awsSecretAccessKey)),
+      s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(prefix => String(prefix)),
+      s3Versions: parseBooleanQueryParam(last(toArray(ctx.query.s3Versions)))
+    });
+  }
+
+  const selectedPresets = [];
+  if (ctx) {
+    selectedPresets.push(...toArray(ctx.query.preset).map(preset => String(preset)));
+  }
+
+  const presetOptions = await getPresetOptions(config, selectedPresets);
 
   const defaultOptions = {
     s3AccessKeyId: config.awsAccessKeyId,
+    s3ByPrefix: [],
     s3SecretAccessKey: config.awsSecretAccessKey
   };
 
   // TODO: validate
-  const options = merge({}, defaultOptions, presetOptions, queryOptions, targetOptions);
+  return merge({}, defaultOptions, presetOptions, queryOptions, targetOptions);
+};
+
+exports.probeS3 = async function(target, options) {
+
+  const s3Url = parseUrl(target);
+
+  const Bucket = s3Url.host;
+  const Prefix = s3Url.pathname;
 
   const s3 = new aws.S3({
     accessKeyId: options.s3AccessKeyId,

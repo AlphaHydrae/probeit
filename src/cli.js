@@ -15,6 +15,10 @@ exports.parse = function() {
       alias: 'P',
       describe: 'load presets from a file or files'
     })
+    .boolean('pretty')
+    .option('pretty', {
+      describe: 'produce more human-readable output'
+    })
     .argv;
 
   return argv;

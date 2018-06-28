@@ -10,13 +10,13 @@ WORKDIR /usr/src/app/
 
 COPY --from=builder /usr/src/app /usr/src/app/
 
-RUN addgroup -S probesrv && \
-    adduser -S -G probesrv probesrv && \
-    chown -R probesrv:probesrv /usr/src/app && \
+RUN addgroup -S probeit && \
+    adduser -S -G probeit probeit && \
+    chown -R probeit:probeit /usr/src/app && \
     npm install --production && \
     npm cache clean --force
 
-USER probesrv:probesrv
+USER probeit:probeit
 
 EXPOSE 3000
 

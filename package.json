@@ -1,33 +1,38 @@
 {
-  "name": "probe-srv",
+  "name": "probeit",
   "version": "2.0.0-beta",
-  "description": "Probe endpoints over HTTP & HTTPS.",
+  "description": "Probe HTTP URLs and AWS S3 buckets.",
   "main": "src/index.js",
   "bin": {
-    "probe-srv": "./bin/probe-srv"
+    "probeit": "./bin/probeit"
   },
   "scripts": {
-    "dev": "nodemon bin/probe-srv",
+    "dev": "nodemon bin/probeit",
     "doctoc": "doctoc --notitle --github README.md",
     "lint": "eslint src",
     "prepublishOnly": "npm run lint",
-    "start": "node bin/probe-srv"
+    "start": "node bin/probeit"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AlphaHydrae/probe-srv.git"
+    "url": "git+https://github.com/AlphaHydrae/probeit.git"
   },
   "keywords": [
-    "probe",
+    "aws",
+    "check",
+    "expected",
+    "health",
     "http",
-    "prometheus"
+    "probe",
+    "prometheus",
+    "s3"
   ],
   "author": "Simon Oulevay <npm@alphahydrae.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/AlphaHydrae/probe-srv/issues"
+    "url": "https://github.com/AlphaHydrae/probeit/issues"
   },
-  "homepage": "https://github.com/AlphaHydrae/probe-srv#readme",
+  "homepage": "https://github.com/AlphaHydrae/probeit#readme",
   "files": [
     "bin",
     "LICENSE.txt",

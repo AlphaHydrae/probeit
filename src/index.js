@@ -1,15 +1,31 @@
 const { red } = require('chalk');
 
+const { probe: probeCli } = require('./api/cli');
+const { start: startServer } = require('./api/server');
 const { parse: parseArgs } = require('./cli');
 const { load: loadConfig } = require('./config');
-const { start: startServer } = require('./server');
 
 exports.bin = function() {
-  return exports.start().catch(err => console.error(red(err.stack)));
+  return Promise.resolve().then(exports.run).catch(err => console.error(red(err.stack)));
 };
 
-exports.start = async function(customArgs) {
-  const args = customArgs || parseArgs();
+exports.loadConfig = loadConfig;
+exports.parseArgs = parseArgs;
+
+exports.run = async function() {
+
+  const args = parseArgs();
+  if (args._.length >= 2) {
+    throw new Error('This program only accepts zero or one argument');
+  }
+
   const config = await loadConfig(args);
-  await startServer(config);
+
+  if (args._.length === 1) {
+    await probeCli(args._[0], config);
+  } else {
+    await startServer(config);
+  }
 };
+
+exports.startServer = startServer;
