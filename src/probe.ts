@@ -1,7 +1,9 @@
-const { getProbe, getProbeOptions } = require('./probes');
-const { buildMetric, compareMetrics } = require('./utils');
+import { Context } from 'koa';
 
-exports.probe = async function(target, config, ctx) {
+import { getProbe, getProbeOptions } from './probes';
+import { buildMetric, compareMetrics } from './utils';
+
+exports.probe = async function(target: string, config, ctx: Context) {
 
   const probe = getProbe(target);
   const start = new Date().getTime();

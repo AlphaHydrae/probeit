@@ -1,14 +1,16 @@
-const { underscore } = require('inflection');
-const { each, includes, reduce } = require('lodash');
-const moment = require('moment');
+import { underscore } from 'inflection';
+import { each, includes, reduce } from 'lodash';
+import * as moment from 'moment';
+
+import { Metric, ProbeResult } from './utils';
 
 const SUFFIX_TYPES = [ 'bytes', 'seconds' ];
 
-exports.toPrometheusMetrics = function(result, pretty) {
+export function toPrometheusMetrics(result: ProbeResult, pretty: boolean) {
 
   let previousMetricName;
   let currentMetricName;
-  const lines = [];
+  const lines: string[] = [];
 
   for (const metric of result.metrics) {
 
@@ -36,17 +38,7 @@ exports.toPrometheusMetrics = function(result, pretty) {
       metricKey = `${metricKey}{${metricKeyTags}}`;
     }
 
-    if (metric.type === 'boolean') {
-      lines.push(`${metricKey} ${metric.value ? 1 : 0}`);
-    } else if (metric.type === 'datetime') {
-      lines.push(`${metricKey} ${metric.value ? moment(metric.value).unix() : -1}`);
-    } else if (includes([ 'bytes', 'quantity', 'seconds' ], metric.type)) {
-      lines.push(`${metricKey} ${metric.value !== null ? metric.value : -1}`);
-    } else if (includes([ 'number' ], metric.type)) {
-      lines.push(`${metricKey} ${metric.value !== null ? metric.value : 'NaN'}`);
-    } else {
-      throw new Error(`Conversion to Prometheus metrics not supported for values of type "${metric.type}"`);
-    }
+    lines.push(buildValueLine(metricKey, metric));
 
     previousMetricName = metric.name;
   }
@@ -76,4 +68,18 @@ exports.toPrometheusMetrics = function(result, pretty) {
   lines.push(`probe_success ${result.success ? 1 : 0}`);
 
   return lines.join('\n');
-};
+}
+
+export function buildValueLine(key: string, metric: Metric): string {
+  if (metric.type === 'boolean') {
+    return `${key} ${metric.value ? 1 : 0}`;
+  } else if (metric.type === 'datetime') {
+    return `${key} ${metric.value ? moment(metric.value).unix() : -1}`;
+  } else if (includes([ 'bytes', 'quantity', 'seconds' ], metric.type)) {
+    return `${key} ${metric.value !== null ? metric.value : -1}`;
+  } else if (includes([ 'number' ], metric.type)) {
+    return `${key} ${metric.value !== null ? metric.value : 'NaN'}`;
+  } else {
+    throw new Error(`Conversion to Prometheus metrics not supported for values of type "${metric.type}"`);
+  }
+}

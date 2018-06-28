@@ -1,8 +1,8 @@
-const { readFile } = require('fs-extra');
-const { has, isInteger, merge, pick } = require('lodash');
-const log4js = require('log4js');
+import { readFile } from 'fs-extra';
+import { has, isInteger, merge, pick } from 'lodash';
+import * as log4js from 'log4js';
 
-const { loadConfig } = require('./utils');
+import { loadConfig } from './utils';
 
 const defaultConfigFile = 'config.yml';
 
