@@ -1,14 +1,17 @@
 import { ClientRequest, IncomingMessage, request as requestHttp, RequestOptions } from 'http';
 import { request as requestHttps } from 'https';
 import { Context } from 'koa';
-import { assign, each, isNaN, last, merge, pick } from 'lodash';
+import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, last, merge, pick } from 'lodash';
 import * as moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
 
 import { Config } from '../config';
+import { buildMetric, Metric } from '../metrics';
 import { getPresetOptions } from '../presets';
-import { buildMetric, Failure, increase, Metric, parseBooleanParam, parseHttpParams, ProbeResult, toArray } from '../utils';
+import { Failure, HttpParams, increase, parseBooleanParam, parseHttpParams, ProbeResult, toArray, validateArrayOption, validateBooleanOption, validateNumericOption, validateStringArrayOption, validateStringOption } from '../utils';
+
+const httpStatusCodeRangeRegExp = /^([1-5])xx$/i;
 
 const optionNames = [
   // Parameters
@@ -18,6 +21,8 @@ const optionNames = [
   'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
   'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion'
 ];
+
+export type ExpectHttpRedirects = boolean | number;
 
 interface HttpProbeData {
   req: ClientRequest;
@@ -39,15 +44,17 @@ interface HttpProbeState {
 
 export interface HttpProbeOptions {
   allowUnauthorized?: boolean;
-  expectHttpRedirects?: boolean | number;
+  expectHttpRedirects?: ExpectHttpRedirects;
   expectHttpRedirectTo?: string;
+  // TODO: use RegExp here
   expectHttpResponseBodyMatch?: string[];
   expectHttpResponseBodyMismatch?: string[];
   expectHttpSecure?: boolean;
+  // TODO: parse this correctly
   expectHttpStatusCode?: Array<number | string>;
   expectHttpVersion?: string;
   followRedirects?: boolean;
-  headers?: { [key: string]: string[] };
+  headers?: HttpParams;
   method?: string;
 }
 
@@ -61,11 +68,11 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
   if (ctx) {
     assign(queryOptions, {
       allowUnauthorized: parseBooleanParam(last(toArray(ctx.query.allowUnauthorized))),
-      expectHttpRedirects: last(toArray(ctx.query.expectHttpRedirects)),
+      expectHttpRedirects: parseExpectHttpRedirects(last(toArray(ctx.query.expectHttpRedirects))),
       expectHttpRedirectTo: last(toArray(ctx.query.expectHttpRedirectTo)),
       expectHttpResponseBodyMatch: toArray(ctx.query.expectHttpResponseBodyMatch),
       expectHttpResponseBodyMismatch: toArray(ctx.query.expectHttpResponseBodyMismatch),
-      expectHttpSecure: parseBooleanParam(last(toArray(ctx.query.expectHttpSecure)), null),
+      expectHttpSecure: parseBooleanParam(last(toArray(ctx.query.expectHttpSecure))),
       expectHttpStatusCode: toArray(ctx.query.expectHttpStatusCode),
       expectHttpVersion: last(toArray(ctx.query.expectHttpVersion)),
       followRedirects: parseBooleanParam(last(toArray(ctx.query.followRedirects))),
@@ -74,6 +81,7 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
     });
   }
 
+  // TODO: use presets from config
   const selectedPresets = [];
   if (ctx) {
     selectedPresets.push(...toArray(ctx.query.preset).map(String));
@@ -81,11 +89,9 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
 
   const presetOptions = await getPresetOptions(config, selectedPresets);
 
-  const configOptions = pick(config, ...optionNames);
-
   const defaultOptions = {
     allowUnauthorized: false,
-    expectHttpRedirects: ctx && ctx.query.expectHttpRedirectTo ? 'yes' : undefined,
+    expectHttpRedirects: ctx && ctx.query.expectHttpRedirectTo ? true : undefined,
     expectHttpResponseBodyMatch: [],
     expectHttpResponseBodyMismatch: [],
     expectHttpStatusCode: [],
@@ -94,13 +100,94 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
     method: 'GET'
   };
 
-  // TODO: validate
-  return merge({}, defaultOptions, configOptions, presetOptions, queryOptions);
+  // TODO: fix array merge
+  return validateHttpProbeOptions(merge(
+    {},
+    validateHttpProbeOptions(defaultOptions),
+    pick(validateHttpProbeOptions(config), ...optionNames),
+    pick(validateHttpProbeOptions(presetOptions), ...optionNames),
+    validateHttpProbeOptions(queryOptions)
+  ));
+}
+
+export function parseExpectHttpRedirects(value: ExpectHttpRedirects | string | undefined, defaultValue?: ExpectHttpRedirects): ExpectHttpRedirects | undefined {
+  if (value === undefined) {
+    return defaultValue;
+  } else if (typeof value === 'boolean' || typeof value === 'number') {
+    return value;
+  }
+
+  const valueAsNumber = Number(value);
+  if (isNaN(valueAsNumber)) {
+    return parseBooleanParam(value);
+  }
+
+  return valueAsNumber;
 }
 
 export async function probeHttp(target: string, options: HttpProbeOptions) {
   const probeData = await performHttpProbe(target, options);
   return getHttpMetrics(probeData.req, probeData.res, probeData.state, options);
+}
+
+export function validateExpectHttpRedirects(options: HttpProbeOptions) {
+  if (options.expectHttpRedirects !== undefined && typeof options.expectHttpRedirects !== 'boolean' && typeof options.expectHttpRedirects !== 'number') {
+    throw new Error(`"expectHttpRedirects" option must be a boolean or a number; got ${typeof options.expectHttpRedirects}`);
+  } else if (typeof options.expectHttpRedirects === 'number') {
+    validateNumericOption(options, 'expectHttpRedirects', true, 0);
+  }
+}
+
+export function validateExpectHttpStatusCodeOption(options: HttpProbeOptions) {
+
+  validateArrayOption(options, 'expectHttpStatusCode', 'integers or strings', v => isInteger(v) || typeof v === 'string');
+  if (options.expectHttpStatusCode === undefined) {
+    return;
+  }
+
+  for (const code of options.expectHttpStatusCode) {
+    if (code < 0) {
+      throw new Error(`"expectHttpStatusCode" option must not contain negative numbers; got ${code}`);
+    } else if (typeof code === 'string' && !code.match(httpStatusCodeRangeRegExp)) {
+      throw new Error(`"expectHttpStatusCode" option must contain only strings that are HTTP status code ranges (e.g. 2xx); got ${JSON.stringify(code)}`);
+    }
+  }
+}
+
+export function validateHeadersOption(options: HttpProbeOptions) {
+  const value = options.headers;
+  if (value === undefined) {
+    return;
+  } else if (!isPlainObject(value)) {
+    throw new Error(`"headers" option must be a plain object; got ${typeof value}`);
+  }
+
+  each(value, (values, key) => {
+    if (typeof key !== 'string') {
+      throw new Error(`"headers" option must have only strings as keys; got ${typeof key}`);
+    } else if (!isArray(values)) {
+      throw new Error(`"headers" option must be a map of string arrays; key "${key}" has type ${typeof values}`);
+    } else if (values.some(v => typeof v !== 'string')) {
+      throw new Error(`"headers" option must be a map of string arrays; key "${key}" has values that are not strings`);
+    }
+  });
+}
+
+export function validateHttpProbeOptions(options: HttpProbeOptions): HttpProbeOptions {
+  validateBooleanOption(options, 'allowUnauthorized');
+  validateExpectHttpRedirects(options);
+  validateStringOption(options, 'expectHttpRedirectTo');
+  // TODO: parse as RegExps
+  validateStringArrayOption(options, 'expectHttpResponseBodyMatch');
+  validateStringArrayOption(options, 'expectHttpResponseBodyMismatch');
+  validateBooleanOption(options, 'expectHttpSecure');
+  // TODO: parse this correctly
+  validateExpectHttpStatusCodeOption(options);
+  validateStringOption(options, 'expectHttpVersion');
+  validateBooleanOption(options, 'followRedirects');
+  validateHeadersOption(options);
+  validateStringOption(options, 'method');
+  return options;
 }
 
 function performHttpProbe(target: string, options: HttpProbeOptions, state: HttpProbeState = { counters: {}, requests: [] }): Promise<HttpProbeData> {
@@ -252,33 +339,26 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
 
 function validateHttpRedirects(state: HttpProbeState, failures: Failure[], options: HttpProbeOptions) {
 
-  const expectedRedirects = options.expectHttpRedirects;
+  const expected = options.expectHttpRedirects;
 
-  const expectedRedirectCount = Number(expectedRedirects);
-  if (!isNaN(expectedRedirectCount) && state.counters.redirects !== expectedRedirectCount) {
-
-    failures.push({
-      actual: state.counters.redirects,
-      cause: 'invalidHttpRedirectCount',
-      description: `Expected the HTTP request to be redirected exactly ${expectedRedirectCount} time${expectedRedirectCount !== 1 ? 's' : ''}`,
-      expected: expectedRedirectCount
-    });
-
-    return;
-  }
-
-  const shouldRedirect = parseBooleanParam(expectedRedirects, null);
-  if (shouldRedirect === true && !state.counters.redirects) {
+  if (expected === true && !state.counters.redirects) {
     failures.push({
       cause: 'missingHttpRedirect',
       description: 'Expected the server to send an HTTP redirection'
     });
-  } else if (shouldRedirect === false && state.counters.redirects) {
+  } else if (expected === false && state.counters.redirects) {
     failures.push({
       actual: state.counters.redirects,
       cause: 'unexpectedHttpRedirect',
       description: 'Did not expect the server to send an HTTP redirection',
       expected: 0
+    });
+  } else if (isFinite(expected) && state.counters.redirects !== expected) {
+    failures.push({
+      expected,
+      actual: state.counters.redirects,
+      cause: 'invalidHttpRedirectCount',
+      description: `Expected the HTTP request to be redirected exactly ${expected} time${expected !== 1 ? 's' : ''}`
     });
   }
 }
@@ -367,7 +447,7 @@ function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], optio
       continue;
     }
 
-    const rangeMatch = code.match(/^([1-5])xx$/i);
+    const rangeMatch = code.match(httpStatusCodeRangeRegExp);
     if (rangeMatch) {
       const rangeStart = parseInt(rangeMatch[1], 10) * 100;
       if (actual && actual >= rangeStart && actual <= rangeStart + 99) {

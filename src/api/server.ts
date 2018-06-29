@@ -2,14 +2,15 @@ import * as Koa from 'koa';
 import { includes } from 'lodash';
 
 import { Config } from '../config';
+import { getLogger } from '../logger';
 import { probe } from '../probe';
 import { toPrometheusMetrics } from '../prometheus';
 import { parseBooleanParam } from '../utils';
 
-export function start(config: Config) {
+export function startServer(config: Config) {
 
   const app = new Koa();
-  const logger = config.getLogger('server');
+  const logger = getLogger('server', config);
 
   app.use(async ctx => {
     if (!includes([ '/', '/metrics' ], ctx.path)) {

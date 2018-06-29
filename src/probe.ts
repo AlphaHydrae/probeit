@@ -1,8 +1,9 @@
 import { Context } from 'koa';
 
 import { Config } from './config';
+import { buildMetric } from './metrics';
 import { getProbe, getProbeOptions } from './probes';
-import { buildMetric, compareMetrics, ProbeResult } from './utils';
+import { compareMetrics, ProbeResult } from './utils';
 
 export async function probe(target: string, config: Config, ctx?: Context): Promise<ProbeResult> {
 

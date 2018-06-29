@@ -1,35 +1,9 @@
 import { readFile } from 'fs-extra';
 import { safeLoad as parseYaml } from 'js-yaml';
-import { has, isArray, isFinite, isInteger, isPlainObject, uniq, values } from 'lodash';
-import * as moment from 'moment';
+import { has, isArray, isFinite, isInteger, merge, uniq } from 'lodash';
 import { extname } from 'path';
 
-const METRIC_TYPES = {
-  boolean: {
-    description: 'true or false',
-    validate: (v: any) => typeof v === 'boolean'
-  },
-  bytes: {
-    description: 'an integer greater than or equal to zero',
-    validate: (v: any) => isInteger(v) && v >= 0
-  },
-  datetime: {
-    description: 'a date in ISO-8601 format',
-    validate: (v: any) => moment(v).isValid()
-  },
-  number: {
-    description: 'a number with no associated unit of measurement',
-    validate: isFinite
-  },
-  quantity: {
-    description: 'an integer greater than or equal to zero representing an amount of something',
-    validate: (v: any) => isInteger(v) && v >= 0
-  },
-  seconds: {
-    description: 'a number greater than or equal to zero',
-    validate: (v: any) => isFinite(v) && v >= 0
-  }
-};
+import { Metric } from './metrics';
 
 export interface Failure {
   actual?: any;
@@ -38,72 +12,18 @@ export interface Failure {
   expected?: any;
 }
 
-export interface BaseMetric {
-  description: string;
-  name: string;
-  tags: { [key: string]: string };
-  type: string;
-  value: boolean | number | string | null;
-}
-
-export interface BooleanMetric extends BaseMetric {
-  type: 'boolean';
-  value: boolean | null;
-}
-
-export interface NumberMetric extends BaseMetric {
-  type: 'bytes' | 'number' | 'quantity' | 'seconds';
-  value: number | null;
-}
-
-export interface DatetimeMetric extends BaseMetric {
-  type: 'datetime';
-  value: string | null;
-}
-
-export type Metric = BooleanMetric | DatetimeMetric | NumberMetric;
-
-export type MetricType = 'boolean' | 'bytes' | 'datetime' | 'number' | 'quantity' | 'seconds';
-
 export interface ProbeResult {
   failures: Failure[];
   metrics: Metric[];
   success: boolean;
 }
 
-export function buildMetric(name: string, type: 'datetime', value: string | null, description: string, tags?: { [key: string]: string }): DatetimeMetric;
-export function buildMetric(name: string, type: 'boolean', value: boolean | null, description: string, tags?: { [key: string]: string }): BooleanMetric;
-export function buildMetric(name: string, type: 'bytes' | 'number' | 'quantity' | 'seconds', value: number | null, description: string, tags?: { [key: string]: string }): NumberMetric;
-export function buildMetric(name: string, type: MetricType, value: boolean | number | string | null, description: string, tags: { [key: string]: string } = {}): any {
-  if (typeof name !== 'string') {
-    throw new Error(`Metric name must be a string, got ${typeof name}`);
-  } else if (!name.match(/^[a-z0-9]+(?:[A-Z0-9][a-z0-9]+)*$/)) {
-    throw new Error(`Metric name "${name}" is not in camel-case`);
-  } else if (!METRIC_TYPES[type]) {
-    throw new Error(`Unknown metric type "${type}"; must be one of the following: ${Object.keys(METRIC_TYPES).map(t => `"${t}"`).join(', ')}`);
-  } else if (value !== null && !METRIC_TYPES[type].validate(value)) {
-    throw new Error(`Invalid metric value ${JSON.stringify(value)} for type "${type}": must be ${METRIC_TYPES[type].description}`);
-  } else if (typeof description !== 'string') {
-    throw new Error(`Metric description must be a string, got ${typeof description}`);
-  } else if (description.match(/^\s*$/)) {
-    throw new Error('Metric description cannot be blank');
-  } else if (!isPlainObject(tags)) {
-    throw new Error(`Metric tags must be a plain object, got ${typeof tags}`);
-  } else if (Object.keys(tags).some(key => !key.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/))) {
-    throw new Error(`Metric tag keys must contain only letters, digits and underscores, and cannot start with a digit (${Object.keys(tags).sort().join(', ')})`);
-  } else if (values(tags).some(tag => typeof tag !== 'boolean' && typeof tag !== 'number' && typeof tag !== 'string')) {
-    throw new Error(`Metric tag values must be booleans, numbers or string (${JSON.stringify(tags)})`);
-  } else if (values(tags).some(tag => !!String(tag).match(/"/))) {
-    throw new Error(`Metric tag values must not contain double quotes (${JSON.stringify(tags)})`);
-  }
+export interface HttpParams {
+  [key: string]: string[];
+}
 
-  return {
-    description,
-    name,
-    tags,
-    type,
-    value
-  };
+export async function compactResolved<T = any>(...values: Array<T | Promise<T | undefined> | undefined>): Promise<T[]> {
+  return (await Promise.all(values)).filter(value => value !== undefined) as T[];
 }
 
 export function compareMetrics(a: Metric, b: Metric) {
@@ -130,6 +50,14 @@ export function compareMetrics(a: Metric, b: Metric) {
   return 0;
 }
 
+export async function firstResolved<T = any>(...values: Array<T | Promise<T | undefined> | undefined>): Promise<T | undefined> {
+  return (await Promise.all(values)).find(value => value !== undefined);
+}
+
+export function increase(counters: { [key: string]: number | undefined }, key: string, by: number) {
+  counters[key] = (counters[key] || 0) + by;
+}
+
 export async function loadConfig(file: string) {
   if (file.match(/\.json$/)) {
     return JSON.parse(await readFile(file, 'utf8'));
@@ -140,7 +68,11 @@ export async function loadConfig(file: string) {
   }
 }
 
-export function parseBooleanParam(value: boolean | number | string | undefined, defaultValue: boolean | null = false): boolean | null {
+export async function parseAsyncParam<T>(value: T | string | Promise<T | string | undefined> | undefined, parser: (value: T | string | undefined, defaultValue?: T) => T | undefined, defaultValue?: T): Promise<T | undefined> {
+  return parser(await value, defaultValue);
+}
+
+export function parseBooleanParam(value: boolean | string | undefined, defaultValue?: boolean): boolean | undefined {
   if (value === undefined) {
     return defaultValue;
   }
@@ -148,25 +80,30 @@ export function parseBooleanParam(value: boolean | number | string | undefined, 
   return typeof value === 'boolean' ? value : !!String(value).match(/^1|y|yes|t|true$/i);
 }
 
-export function parseHttpParams(value: string | string[] | undefined, defaultValue = {}) {
-
-  const params = {};
-
+export function parseHttpParams(value: string | string[] | undefined): HttpParams {
   if (value === undefined) {
-    return defaultValue;
+    return {};
   } else if (typeof value === 'string') {
     const [ paramName, paramValue ] = value.split('=', 2);
-    appendHttpParam(params, paramName, paramValue || '');
+    return { [paramName]: [ paramValue ] };
   } else if (isArray(value)) {
-    for (const singleValue of value) {
-      const [ paramName, paramValue ] = String(singleValue).split('=', 2);
-      appendHttpParam(params, paramName, paramValue || '');
-    }
+    return value.reduce((memo, singleValue) => merge(memo, parseHttpParams(singleValue)), {});
   } else {
     throw new Error('HTTP parameter must be a string or an array of strings');
   }
+}
 
-  return params;
+export function parseIntegerParam(value: number | string | undefined, defaultValue?: number): number | undefined {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+  if (!isInteger(parsed)) {
+    throw new Error(`${value} is not a valid integer`);
+  }
+
+  return parsed;
 }
 
 export function promisified<T>(nodeStyleFunc: (...args: any[]) => any, ...args: any[]) {
@@ -193,11 +130,47 @@ export function toArray<T>(value: T | undefined): T[] {
   return isArray(value) ? value : [ value ];
 }
 
-export function increase(counters: { [key: string]: number | undefined }, key: string, by: number) {
-  counters[key] = (counters[key] || 0) + by;
+export function validateArrayOption<O, K extends keyof O, V extends O[K]>(options: O, name: K, description: string, validator: (value: V) => boolean) {
+  const value = options[name];
+  if (value !== undefined && !isArray(value)) {
+    throw new Error(`"${name}" option must be an array of ${description}; got ${typeof(value)}`);
+  } else if (isArray(value) && value.some(v => !validator(v))) {
+    throw new Error(`"${name}" option must be an array of ${description} but it contains other types: ${value.map(v => typeof v)}`);
+  }
 }
 
-function appendHttpParam(params: { [key: string]: string[] }, key: string, value: string) {
-  const previous = params[key] || [];
-  params[key] = [ ...previous, value ];
+export function validateBooleanOption<O, K extends keyof O>(options: O, name: K) {
+  const value = options[name];
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new Error(`"${name}" option must be a boolean; got ${typeof value}`);
+  }
+}
+
+export function validateNumericOption<O, K extends keyof O>(options: O, name: K, integer: boolean, min?: number, max?: number) {
+
+  const value = options[name];
+  if (value === undefined) {
+    return;
+  }
+
+  if (typeof value !== 'number' || !isFinite(value)) {
+    throw new Error(`"${name}" option must be a number; got ${typeof value}`);
+  } else if (integer && !isInteger(value)) {
+    throw new Error(`"${name}" option must be an integer; got ${value}`);
+  } else if (min !== undefined && value < min) {
+    throw new Error(`"${name}" option must be greater than or equal to ${min}; got ${value}`);
+  } else if (max !== undefined && value > max) {
+    throw new Error(`"${name}" option must be smaller than or equal to ${max}; got ${value}`);
+  }
+}
+
+export function validateStringArrayOption<O, K extends keyof O>(options: O, name: K) {
+  return validateArrayOption(options, name, 'strings', v => typeof v === 'string');
+}
+
+export function validateStringOption<O, K extends keyof O>(options: O, name: K) {
+  const value = options[name];
+  if (value !== undefined && typeof value !== 'string') {
+    throw new Error(`"${name}" option must be a string; got ${typeof value}`);
+  }
 }

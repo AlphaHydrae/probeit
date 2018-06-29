@@ -2,7 +2,8 @@ import { underscore } from 'inflection';
 import { each, includes, reduce } from 'lodash';
 import * as moment from 'moment';
 
-import { Metric, ProbeResult } from './utils';
+import { Metric } from './metrics';
+import { ProbeResult } from './utils';
 
 const SUFFIX_TYPES = [ 'bytes', 'seconds' ];
 

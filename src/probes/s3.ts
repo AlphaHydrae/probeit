@@ -4,21 +4,21 @@ import { assign, last, merge, pick } from 'lodash';
 import * as moment from 'moment';
 import { parse as parseUrl } from 'url';
 
-import { Config } from '../config';
+import { Config, GeneralOptions } from '../config';
+import { buildMetric, Metric } from '../metrics';
 import { getPresetOptions } from '../presets';
-import { buildMetric, Metric, parseBooleanParam, ProbeResult, promisified, toArray } from '../utils';
+import { parseBooleanParam, ProbeResult, promisified, toArray, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
 
 const optionNames = [
-  'awsAccessKeyId', 'awsSecretAccessKey',
   's3AccessKeyId', 's3SecretAccessKey',
   's3ByPrefix', 's3Versions'
 ];
 
 export interface S3ProbeOptions {
-  s3AccessKeyId: string;
-  s3SecretAccessKey: string;
-  s3ByPrefix: string[];
-  s3Versions: boolean;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
+  s3ByPrefix?: string[];
+  s3Versions?: boolean;
 }
 
 export async function getS3ProbeOptions(target: string, config: Config, ctx?: Context): Promise<S3ProbeOptions> {
@@ -30,16 +30,23 @@ export async function getS3ProbeOptions(target: string, config: Config, ctx?: Co
     s3SecretAccessKey: s3Url.auth && s3Url.auth.match(/:.+/) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
   };
 
+  const queryDefaults = {};
   const queryOptions = {};
   if (ctx) {
+    assign(queryDefaults, {
+      awsAccessKeyId: last(toArray(ctx.query.awsAccessKeyId)),
+      awsSecretAccessKey: last(toArray(ctx.query.awsSecretAccessKey))
+    });
+
     assign(queryOptions, {
-      s3AccessKeyId: last(toArray(ctx.query.s3AccessKeyId)) || last(toArray(ctx.query.awsAccessKeyId)),
-      s3SecretAccessKey: last(toArray(ctx.query.s3SecretAccessKey)) || last(toArray(ctx.query.awsSecretAccessKey)),
+      s3AccessKeyId: last(toArray(ctx.query.s3AccessKeyId)),
+      s3SecretAccessKey: last(toArray(ctx.query.s3SecretAccessKey)),
       s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(String),
       s3Versions: parseBooleanParam(last(toArray(ctx.query.s3Versions)))
     });
   }
 
+  // TODO: use presets from config
   const selectedPresets = [];
   if (ctx) {
     selectedPresets.push(...toArray(ctx.query.preset).map(String));
@@ -47,16 +54,23 @@ export async function getS3ProbeOptions(target: string, config: Config, ctx?: Co
 
   const presetOptions = await getPresetOptions(config, selectedPresets);
 
-  const configOptions = pick(config, ...optionNames);
-
   const defaultOptions = {
-    s3AccessKeyId: config.awsAccessKeyId,
-    s3ByPrefix: [],
-    s3SecretAccessKey: config.awsSecretAccessKey
+    ...merge(
+      getS3ProbeDefaultOptions(config),
+      getS3ProbeDefaultOptions(presetOptions),
+      getS3ProbeDefaultOptions(queryDefaults)
+    )
   };
 
-  // TODO: validate
-  return merge({}, defaultOptions, configOptions, presetOptions, queryOptions, targetOptions);
+  // TODO: fix array merge
+  return validateS3ProbeOptions(merge(
+    {},
+    validateS3ProbeOptions(defaultOptions),
+    pick(validateS3ProbeOptions(config), ...optionNames),
+    pick(validateS3ProbeOptions(presetOptions), ...optionNames),
+    validateS3ProbeOptions(queryOptions),
+    validateS3ProbeOptions(targetOptions)
+  ));
 }
 
 export async function probeS3(target: string, options: S3ProbeOptions): Promise<ProbeResult> {
@@ -85,7 +99,7 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
 
   const [ objects, versions ] = await Promise.all([ objectsPromise, versionsPromise ]);
 
-  const aggregationPrefixes = options.s3ByPrefix;
+  const aggregationPrefixes = options.s3ByPrefix || [];
   const globalTags: { [key: string]: string } = {};
 
   if (aggregationPrefixes.length) {
@@ -104,6 +118,14 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
   result.success = true;
 
   return result;
+}
+
+export function validateS3ProbeOptions(options: S3ProbeOptions): S3ProbeOptions {
+  validateStringOption(options, 's3AccessKeyId');
+  validateStringOption(options, 's3SecretAccessKey');
+  validateStringArrayOption(options, 's3ByPrefix');
+  validateBooleanOption(options, 's3Versions');
+  return options;
 }
 
 function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, objects: any[], versions?: any[]) {
@@ -191,9 +213,16 @@ function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, object
   ));
 }
 
+function getS3ProbeDefaultOptions(options: GeneralOptions): S3ProbeOptions {
+  return {
+    s3AccessKeyId: options.awsAccessKeyId,
+    s3SecretAccessKey: options.awsSecretAccessKey
+  };
+}
+
 async function listAllObjects(s3: aws.S3, options: aws.S3.ListObjectsV2Request, objects: any[] = []): Promise<any[]> {
 
-  const res = await promisified<aws.S3.ListObjectsV2Output>(opts => s3.listObjectsV2(opts), options);
+  const res = await promisified<aws.S3.ListObjectsV2Output>(s3.listObjectsV2.bind(s3), options);
   if (res.Contents) {
     objects.push(...res.Contents);
 
@@ -207,7 +236,7 @@ async function listAllObjects(s3: aws.S3, options: aws.S3.ListObjectsV2Request, 
 
 async function listAllObjectVersions(s3: aws.S3, options: aws.S3.ListObjectVersionsRequest, versions: any[] = []): Promise<any[]> {
 
-  const res = await promisified<aws.S3.ListObjectVersionsOutput>(opts => s3.listObjectVersions(opts), options);
+  const res = await promisified<aws.S3.ListObjectVersionsOutput>(s3.listObjectVersions.bind(s3), options);
   if (res.Versions) {
     versions.push(...res.Versions);
 
