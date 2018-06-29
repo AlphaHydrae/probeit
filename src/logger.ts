@@ -17,11 +17,13 @@ export function getLogger(name: string, options: LoggerOptions = {}): Logger {
   return logger;
 }
 
-export function validateLogLevelOption(options: LoggerOptions) {
+export function validateLogLevelOption(options: LoggerOptions): LogLevel {
   validateStringOption(options, 'logLevel');
 
   const logLevel = options.logLevel;
   if (logLevel !== undefined && !includes(LOG_LEVELS, logLevel.toLowerCase())) {
     throw new Error(`"logLevel" option must be one of the following values: ${LOG_LEVELS.map(level => `"${logLevel}"`).join(', ')}; got ${logLevel}`);
   }
+
+  return logLevel as LogLevel;
 }

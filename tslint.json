@@ -21,7 +21,7 @@
     "interface-name": false,
     "linebreak-style": [ true, "LF" ],
     "max-classes-per-file": [ true, 3 ],
-    "max-file-line-count": [ true, 500 ],
+    "max-file-line-count": [ true, 600 ],
     "member-access": [ true, "no-public" ],
     "no-accessor-recursion": true,
     "no-boolean-literal-compare": true,

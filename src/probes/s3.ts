@@ -7,7 +7,7 @@ import { parse as parseUrl } from 'url';
 import { Config, GeneralOptions } from '../config';
 import { buildMetric, Metric } from '../metrics';
 import { getPresetOptions } from '../presets';
-import { parseBooleanParam, ProbeResult, promisified, toArray, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
+import { ProbeResult, promisified, Raw, toArray, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
 
 const optionNames = [
   's3AccessKeyId', 's3SecretAccessKey',
@@ -41,8 +41,8 @@ export async function getS3ProbeOptions(target: string, config: Config, ctx?: Co
     assign(queryOptions, {
       s3AccessKeyId: last(toArray(ctx.query.s3AccessKeyId)),
       s3SecretAccessKey: last(toArray(ctx.query.s3SecretAccessKey)),
-      s3ByPrefix: toArray(ctx.query.s3ByPrefix).map(String),
-      s3Versions: parseBooleanParam(last(toArray(ctx.query.s3Versions)))
+      s3ByPrefix: toArray(ctx.query.s3ByPrefix),
+      s3Versions: last(toArray(ctx.query.s3Versions))
     });
   }
 
@@ -120,12 +120,13 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
   return result;
 }
 
-export function validateS3ProbeOptions(options: S3ProbeOptions): S3ProbeOptions {
-  validateStringOption(options, 's3AccessKeyId');
-  validateStringOption(options, 's3SecretAccessKey');
-  validateStringArrayOption(options, 's3ByPrefix');
-  validateBooleanOption(options, 's3Versions');
-  return options;
+export function validateS3ProbeOptions(options: Raw<S3ProbeOptions>): S3ProbeOptions {
+  return {
+    s3AccessKeyId: validateStringOption(options, 's3AccessKeyId'),
+    s3SecretAccessKey: validateStringOption(options, 's3SecretAccessKey'),
+    s3ByPrefix: validateStringArrayOption(options, 's3ByPrefix'),
+    s3Versions: validateBooleanOption(options, 's3Versions')
+  };
 }
 
 function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, objects: any[], versions?: any[]) {

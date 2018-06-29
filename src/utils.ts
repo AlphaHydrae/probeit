@@ -12,15 +12,17 @@ export interface Failure {
   expected?: any;
 }
 
+export interface HttpParams {
+  [key: string]: string[];
+}
+
 export interface ProbeResult {
   failures: Failure[];
   metrics: Metric[];
   success: boolean;
 }
 
-export interface HttpParams {
-  [key: string]: string[];
-}
+export type Raw<T> = { [K in keyof T]?: any };
 
 export async function compactResolved<T = any>(...values: Array<T | Promise<T | undefined> | undefined>): Promise<T[]> {
   return (await Promise.all(values)).filter(value => value !== undefined) as T[];
@@ -58,6 +60,14 @@ export function increase(counters: { [key: string]: number | undefined }, key: s
   counters[key] = (counters[key] || 0) + by;
 }
 
+export function isFalseString(value: any): boolean {
+  return typeof value === 'string' && !!value.match(/^(0|n|no|f|false)$/i);
+}
+
+export function isTrueString(value: any): boolean {
+  return typeof value === 'string' && !!value.match(/^(1|y|yes|t|true)$/i);
+}
+
 export async function loadConfig(file: string) {
   if (file.match(/\.json$/)) {
     return JSON.parse(await readFile(file, 'utf8'));
@@ -72,6 +82,7 @@ export async function parseAsyncParam<T>(value: T | string | Promise<T | string 
   return parser(await value, defaultValue);
 }
 
+// TODO: check if these parse* functions are still used (also in probes)
 export function parseBooleanParam(value: boolean | string | undefined, defaultValue?: boolean): boolean | undefined {
   if (value === undefined) {
     return defaultValue;
@@ -130,47 +141,66 @@ export function toArray<T>(value: T | undefined): T[] {
   return isArray(value) ? value : [ value ];
 }
 
-export function validateArrayOption<O, K extends keyof O, V extends O[K]>(options: O, name: K, description: string, validator: (value: V) => boolean) {
+export function validateArrayOption<T, O, K extends keyof O>(options: O, name: K, description: string, validator: (value: any) => boolean): T[] | undefined {
+
   const value = options[name];
   if (value !== undefined && !isArray(value)) {
     throw new Error(`"${name}" option must be an array of ${description}; got ${typeof(value)}`);
   } else if (isArray(value) && value.some(v => !validator(v))) {
     throw new Error(`"${name}" option must be an array of ${description} but it contains other types: ${value.map(v => typeof v)}`);
   }
+
+  return value;
 }
 
-export function validateBooleanOption<O, K extends keyof O>(options: O, name: K) {
+export function validateBooleanOption<O, K extends keyof O>(options: O, name: K): boolean | undefined {
   const value = options[name];
-  if (value !== undefined && typeof value !== 'boolean') {
-    throw new Error(`"${name}" option must be a boolean; got ${typeof value}`);
+  if (value === undefined) {
+    return;
+  } else if (typeof value === 'boolean') {
+    return value;
+  } else if (isFalseString(value)) {
+    return false;
+  } else if (isTrueString(value)) {
+    return true;
+  } else {
+    throw new Error(`"${name}" option must be a boolean or a boolean-like string (1/0, y/n, yes/no, t/f or true/false); got ${typeof value}`);
   }
 }
 
-export function validateNumericOption<O, K extends keyof O>(options: O, name: K, integer: boolean, min?: number, max?: number) {
+export function validateNumericOption<O, K extends keyof O>(options: O, name: K, integer: boolean, min?: number, max?: number): number | undefined {
 
   const value = options[name];
   if (value === undefined) {
     return;
+  } else if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new Error(`"${name}" option must be a number or a numeric string; got ${typeof value}`);
   }
 
-  if (typeof value !== 'number' || !isFinite(value)) {
-    throw new Error(`"${name}" option must be a number; got ${typeof value}`);
-  } else if (integer && !isInteger(value)) {
+  const n = Number(value);
+  if (!isFinite(n)) {
+    throw new Error(`"${name}" option must be a number or a numeric string; got ${value} (type ${typeof value})`);
+  } else if (integer && !isInteger(n)) {
     throw new Error(`"${name}" option must be an integer; got ${value}`);
-  } else if (min !== undefined && value < min) {
+  } else if (min !== undefined && n < min) {
     throw new Error(`"${name}" option must be greater than or equal to ${min}; got ${value}`);
-  } else if (max !== undefined && value > max) {
+  } else if (max !== undefined && n > max) {
     throw new Error(`"${name}" option must be smaller than or equal to ${max}; got ${value}`);
   }
+
+  return n;
 }
 
-export function validateStringArrayOption<O, K extends keyof O>(options: O, name: K) {
+export function validateStringArrayOption<O, K extends keyof O>(options: O, name: K): string[] | undefined {
   return validateArrayOption(options, name, 'strings', v => typeof v === 'string');
 }
 
-export function validateStringOption<O, K extends keyof O>(options: O, name: K) {
+export function validateStringOption<O, K extends keyof O>(options: O, name: K): string | undefined {
+
   const value = options[name];
   if (value !== undefined && typeof value !== 'string') {
     throw new Error(`"${name}" option must be a string; got ${typeof value}`);
   }
+
+  return value;
 }

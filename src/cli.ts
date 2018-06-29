@@ -1,8 +1,7 @@
 import * as yargs from 'yargs';
 
 import { Config, whitelist } from './config';
-import { parseExpectHttpRedirects } from './probes/http';
-import { parseBooleanParam, parseHttpParams, parseIntegerParam } from './utils';
+import { parseHttpParams } from './utils';
 
 export interface CliOptions extends Partial<Config> {
   target?: string;
@@ -31,7 +30,6 @@ export function parse(): CliOptions {
     })
     .option('port', {
       alias: 'p',
-      coerce: parseIntegerParam,
       describe: 'listen on a specific port (3000 by default)',
       group: 'General options',
       type: 'number'
@@ -43,21 +41,18 @@ export function parse(): CliOptions {
       type: 'string'
     })
     .option('pretty', {
-      coerce: parseBooleanParam,
       describe: 'produce more human-readable output (false by default)',
       group: 'General options',
-      type: 'boolean'
+      type: 'string'
     })
 
     // HTTP probe parameters
     .option('allow-unauthorized', {
-      coerce: parseBooleanParam,
       describe: 'whether to consider an HTTP response with an invalid SSL certificate as a success (false by default)',
       group: 'HTTP probe parameters',
       type: 'string'
     })
     .option('follow-redirects', {
-      coerce: parseBooleanParam,
       describe: 'whether the probe will follow redirects to provide metrics about the final response (true by default)',
       group: 'HTTP probe parameters',
       type: 'string'
@@ -79,7 +74,6 @@ export function parse(): CliOptions {
 
     // HTTP probe expectations
     .option('expect-http-redirects', {
-      coerce: parseExpectHttpRedirects,
       description: 'if boolean, check that HTTP redirects have (or have not) occurred; if integer, check that the number of redirects is the expected one',
       group: 'HTTP probe expectations',
       type: 'string'
@@ -104,7 +98,6 @@ export function parse(): CliOptions {
       type: 'string'
     })
     .option('expect-http-secure', {
-      coerce: parseBooleanParam,
       description: 'check that the final HTTP request is made (or not made) over TLS (both are valid by default)',
       group: 'HTTP probe expectations',
       type: 'string'
@@ -140,7 +133,6 @@ export function parse(): CliOptions {
       type: 'string'
     })
     .option('s3-versions', {
-      coerce: parseBooleanParam,
       describe: 'whether to list object versions in the bucket and generate metrics for them (false by default)',
       group: 'S3 probe parameters',
       type: 'string'
