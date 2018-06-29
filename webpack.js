@@ -1,5 +1,9 @@
+const nodeExternals = require('webpack-node-externals');
+
 module.exports = {
+  devtool: 'source-map',
   entry: './src/index.ts',
+  externals: [ nodeExternals() ],
   mode: process.env.WEBPACK_MODE || 'development',
   module: {
     rules: [
@@ -15,11 +19,11 @@ module.exports = {
   resolve: {
     extensions: [ '.js', '.ts' ]
   },
-  devtool: 'source-map',
+  target: 'node',
   output: {
-    filename: 'lib/probeit.js',
-    sourceMapFilename: 'lib/probeit.map.js',
+    filename: 'lib/index.js',
+    sourceMapFilename: 'lib/index.map.js',
     libraryTarget: 'commonjs',
-    path: __dirname
+    path: __dirname,
   }
 };

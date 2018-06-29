@@ -6,8 +6,9 @@ import * as moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
 
+import { Config } from '../config';
 import { getPresetOptions } from '../presets';
-import { buildMetric, Failure, increase, Metric, parseBooleanParam, parseHttpParams, toArray } from '../utils';
+import { buildMetric, Failure, increase, Metric, parseBooleanParam, parseHttpParams, ProbeResult, toArray } from '../utils';
 
 const optionNames = [
   // Parameters
@@ -18,30 +19,43 @@ const optionNames = [
   'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion'
 ];
 
+interface HttpProbeData {
+  req: ClientRequest;
+  res?: Response;
+  state: HttpProbeState;
+}
+
 interface HttpProbeState {
-  contentTransfer?: number ;
-  firstByte?: number;
+  counters: {
+    contentTransfer?: number;
+    dnsLookup?: number;
+    firstByte?: number;
+    redirects?: number;
+    tlsHandshake?: number;
+    tcpConnection?: number;
+  };
   requests: RequestOptions[];
-  tlsHandshake?: number;
-  tcpConnection?: number;
-  redirects: number;
 }
 
 export interface HttpProbeOptions {
-  allowUnauthorized: boolean;
-  expectHttpRedirects: boolean | number;
-  expectHttpRedirectTo: string;
-  expectHttpResponseBodyMatch: string[];
-  expectHttpResponseBodyMismatch: string[];
-  expectHttpSecure: boolean;
-  expectHttpStatusCode: Array<number | string>;
-  expectHttpVersion: string;
-  followRedirects: boolean;
-  headers: { [key: string]: string[] };
-  method: string;
+  allowUnauthorized?: boolean;
+  expectHttpRedirects?: boolean | number;
+  expectHttpRedirectTo?: string;
+  expectHttpResponseBodyMatch?: string[];
+  expectHttpResponseBodyMismatch?: string[];
+  expectHttpSecure?: boolean;
+  expectHttpStatusCode?: Array<number | string>;
+  expectHttpVersion?: string;
+  followRedirects?: boolean;
+  headers?: { [key: string]: string[] };
+  method?: string;
 }
 
-export async function getHttpProbeOptions(target: string, config, ctx: Context): Promise<HttpProbeOptions> {
+export class Response extends IncomingMessage {
+  body: string;
+}
+
+export async function getHttpProbeOptions(target: string, config: Config, ctx?: Context): Promise<HttpProbeOptions> {
 
   const queryOptions = {};
   if (ctx) {
@@ -84,12 +98,12 @@ export async function getHttpProbeOptions(target: string, config, ctx: Context):
   return merge({}, defaultOptions, configOptions, presetOptions, queryOptions);
 }
 
-export async function probeHttp(target: string, options) {
+export async function probeHttp(target: string, options: HttpProbeOptions) {
   const probeData = await performHttpProbe(target, options);
   return getHttpMetrics(probeData.req, probeData.res, probeData.state, options);
 }
 
-function performHttpProbe(target: string, options, state: HttpProbeState = { redirects: 0, requests: [] }) {
+function performHttpProbe(target: string, options: HttpProbeOptions, state: HttpProbeState = { counters: {}, requests: [] }): Promise<HttpProbeData> {
   return new Promise(resolve => {
 
     // TODO: support query parameters
@@ -112,9 +126,9 @@ function performHttpProbe(target: string, options, state: HttpProbeState = { red
       let body = '';
 
       res.on('readable', () => {
-        if (state.firstByte === undefined) {
+        if (state.counters.firstByte === undefined) {
           times.firstByteAt = new Date().getTime();
-          increase(state, 'firstByte', times.firstByteAt - (times.tlsHandshakeAt || times.tcpConnectionAt));
+          increase(state.counters, 'firstByte', times.firstByteAt - (times.tlsHandshakeAt || times.tcpConnectionAt));
         }
 
         res.read();
@@ -127,14 +141,14 @@ function performHttpProbe(target: string, options, state: HttpProbeState = { red
 
       res.on('end', () => {
         if (times.firstByteAt !== undefined) {
-          increase(state, 'contentTransfer', new Date().getTime() - times.firstByteAt);
+          increase(state.counters, 'contentTransfer', new Date().getTime() - times.firstByteAt);
         }
 
         if (options.followRedirects && res.statusCode && res.statusCode >= 301 && res.statusCode <= 302 && res.headers.location) {
-          increase(state, 'redirects', 1);
+          increase(state.counters, 'redirects', 1);
           resolve(performHttpProbe(res.headers.location, options, state));
         } else {
-          resolve({ req, state, res: Object.assign(res, { body }) });
+          resolve({ req, state, res: Object.assign(Object.create(res), { body }) });
         }
       });
     });
@@ -142,17 +156,17 @@ function performHttpProbe(target: string, options, state: HttpProbeState = { red
     req.on('socket', socket => {
       socket.on('lookup', () => {
         times.dnsLookupAt = new Date().getTime();
-        increase(state, 'dnsLookup', times.dnsLookupAt - times.start);
+        increase(state.counters, 'dnsLookup', times.dnsLookupAt - times.start);
       });
 
       socket.on('connect', () => {
         times.tcpConnectionAt = new Date().getTime();
-        increase(state, 'tcpConnection', times.tcpConnectionAt - (times.dnsLookupAt || times.start));
+        increase(state.counters, 'tcpConnection', times.tcpConnectionAt - (times.dnsLookupAt || times.start));
       });
 
       socket.on('secureConnect', () => {
         times.tlsHandshakeAt = new Date().getTime();
-        increase(state, 'tlsHandshake', times.tlsHandshakeAt - times.tcpConnectionAt);
+        increase(state.counters, 'tlsHandshake', times.tlsHandshakeAt - times.tcpConnectionAt);
       });
     });
 
@@ -164,7 +178,7 @@ function performHttpProbe(target: string, options, state: HttpProbeState = { red
   });
 }
 
-function getHttpMetrics(req: ClientRequest, res: IncomingMessage, state: HttpProbeState, options) {
+function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: HttpProbeState, options: HttpProbeOptions): ProbeResult {
 
   const failures: Failure[] = [];
   const metrics: Metric[] = [];
@@ -191,10 +205,10 @@ function getHttpMetrics(req: ClientRequest, res: IncomingMessage, state: HttpPro
     'httpContentLength',
     'bytes',
     res && res.headers['content-length'] ? parseInt(res.headers['content-length'] || '', 10) : null,
-    'Length of the HTTP response entity in bytes',
+    'Length of the HTTP response entity in bytes'
   ));
 
-  each(pick(state, 'contentTransfer', 'dnsLookup', 'firstByte', 'tcpConnection', 'tlsHandshake'), (value: number, phase: string) => {
+  each(pick(state.counters, 'contentTransfer', 'dnsLookup', 'firstByte', 'tcpConnection', 'tlsHandshake'), (value, phase) => {
     metrics.push(buildMetric(
       'httpDuration',
       'seconds',
@@ -207,7 +221,7 @@ function getHttpMetrics(req: ClientRequest, res: IncomingMessage, state: HttpPro
   metrics.push(buildMetric(
     'httpRedirects',
     'quantity',
-    state.redirects || 0,
+    state.counters.redirects || 0,
     'Number of times HTTP 301 or 302 redirects were followed'
   ));
 
@@ -215,7 +229,7 @@ function getHttpMetrics(req: ClientRequest, res: IncomingMessage, state: HttpPro
     'httpSecure',
     'boolean',
     // FIXME: check whether SSL/TLS is used on final redirect (currently works at any redirect)
-    state.tlsHandshake !== undefined,
+    state.counters.tlsHandshake !== undefined,
     'Indicates whether SSL/TLS was used for the final request'
   ));
 
@@ -236,29 +250,32 @@ function getHttpMetrics(req: ClientRequest, res: IncomingMessage, state: HttpPro
   return { failures, metrics, success };
 }
 
-function validateHttpRedirects(state: HttpProbeState, failures: Failure[], options) {
+function validateHttpRedirects(state: HttpProbeState, failures: Failure[], options: HttpProbeOptions) {
 
   const expectedRedirects = options.expectHttpRedirects;
 
   const expectedRedirectCount = Number(expectedRedirects);
-  if (!isNaN(expectedRedirectCount) && state.redirects !== expectedRedirectCount) {
-    return failures.push({
-      actual: state.redirects,
+  if (!isNaN(expectedRedirectCount) && state.counters.redirects !== expectedRedirectCount) {
+
+    failures.push({
+      actual: state.counters.redirects,
       cause: 'invalidHttpRedirectCount',
       description: `Expected the HTTP request to be redirected exactly ${expectedRedirectCount} time${expectedRedirectCount !== 1 ? 's' : ''}`,
       expected: expectedRedirectCount
     });
+
+    return;
   }
 
   const shouldRedirect = parseBooleanParam(expectedRedirects, null);
-  if (shouldRedirect === true && !state.redirects) {
-    return failures.push({
+  if (shouldRedirect === true && !state.counters.redirects) {
+    failures.push({
       cause: 'missingHttpRedirect',
       description: 'Expected the server to send an HTTP redirection'
     });
-  } else if (shouldRedirect === false && state.redirects) {
-    return failures.push({
-      actual: state.redirects,
+  } else if (shouldRedirect === false && state.counters.redirects) {
+    failures.push({
+      actual: state.counters.redirects,
       cause: 'unexpectedHttpRedirect',
       description: 'Did not expect the server to send an HTTP redirection',
       expected: 0
@@ -266,7 +283,7 @@ function validateHttpRedirects(state: HttpProbeState, failures: Failure[], optio
   }
 }
 
-function validateHttpRedirectTarget(state: HttpProbeState, failures: Failure[], options) {
+function validateHttpRedirectTarget(state: HttpProbeState, failures: Failure[], options: HttpProbeOptions) {
 
   const expectedRedirect = options.expectHttpRedirectTo !== undefined ? parseUrl(options.expectHttpRedirectTo) : undefined;
   if (!expectedRedirect) {
@@ -274,58 +291,62 @@ function validateHttpRedirectTarget(state: HttpProbeState, failures: Failure[], 
   }
 
   const lastRequest = last(state.requests);
-  if (lastRequest && expectedRedirect.protocol === lastRequest.protocol && expectedRedirect.host === lastRequest.host && expectedRedirect.pathname === lastRequest.pathname) {
+  if (lastRequest && expectedRedirect.protocol === lastRequest.protocol && expectedRedirect.host === lastRequest.host && expectedRedirect.pathname === parseUrl(formatUrl(lastRequest)).pathname) {
     return;
   }
 
   failures.push({
-    actual: formatUrl(lastRequest),
+    actual: lastRequest ? formatUrl(lastRequest) : undefined,
     cause: 'invalidHttpRedirectLocation',
     description: `Expected the request to be redirected to ${options.expectHttpRedirectTo}`,
     expected: formatUrl(expectedRedirect)
   });
 }
 
-function validateHttpResponseBody(res: IncomingMessage, failures: Failure[], options) {
+function validateHttpResponseBody(res: Response, failures: Failure[], options: HttpProbeOptions) {
 
-  const body = String(res.body);
+  const body = res.body;
 
-  for (const expectedMatch of options.expectHttpResponseBodyMatch) {
-    if (body.match(new RegExp(expectedMatch))) {
-      continue;
+  if (options.expectHttpResponseBodyMatch) {
+    for (const expectedMatch of options.expectHttpResponseBodyMatch) {
+      if (body.match(new RegExp(expectedMatch))) {
+        continue;
+      }
+
+      failures.push({
+        cause: 'httpResponseBodyMismatch',
+        description: `Expected the HTTP response body to match the following regular expression: ${expectedMatch}`,
+        expected: expectedMatch
+      });
     }
-
-    failures.push({
-      cause: 'httpResponseBodyMismatch',
-      description: `Expected the HTTP response body to match the following regular expression: ${expectedMatch}`,
-      expected: expectedMatch
-    });
   }
 
-  for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
+  if (options.expectHttpResponseBodyMismatch) {
+    for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
 
-    const match = body.match(new RegExp(expectedMismatch));
-    if (!match) {
-      continue;
+      const match = body.match(new RegExp(expectedMismatch));
+      if (!match) {
+        continue;
+      }
+
+      failures.push({
+        actual: match[0],
+        cause: 'unexpectedHttpResponseBodyMatch',
+        description: `Did not expect the HTTP response body to match the following regular expression: ${expectedMismatch}`,
+        expected: expectedMismatch
+      });
     }
-
-    failures.push({
-      actual: match[0],
-      cause: 'unexpectedHttpResponseBodyMatch',
-      description: `Did not expect the HTTP response body to match the following regular expression: ${expectedMismatch}`,
-      expected: expectedMismatch
-    });
   }
 }
 
-function validateHttpSecurity(state: HttpProbeState, failures: Failure[], options) {
+function validateHttpSecurity(state: HttpProbeState, failures: Failure[], options: HttpProbeOptions) {
   const expectSecure = options.expectHttpSecure;
-  if (expectSecure === true && state.tlsHandshake === undefined) {
+  if (expectSecure === true && state.counters.tlsHandshake === undefined) {
     failures.push({
       cause: 'insecureHttp',
       description: 'Expected the server to use SSL/TLS for the request (or final redirect)'
     });
-  } else if (expectSecure === false && state.tlsHandshake !== undefined) {
+  } else if (expectSecure === false && state.counters.tlsHandshake !== undefined) {
     failures.push({
       cause: 'unexpectedlySecureHttp',
       description: 'Did not expect the server to use SSL/TLS for the request (or final redirect)'
@@ -333,10 +354,10 @@ function validateHttpSecurity(state: HttpProbeState, failures: Failure[], option
   }
 }
 
-function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], options) {
+function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], options: HttpProbeOptions) {
 
   const actual = res.statusCode;
-  const expected = options.expectHttpStatusCode;
+  const expected = options.expectHttpStatusCode || [];
   if (!expected.length) {
     expected.push('2xx', '3xx');
   }
@@ -368,11 +389,11 @@ function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], optio
   });
 }
 
-function validateHttpVersion(res: IncomingMessage, failures: Failure[], options) {
+function validateHttpVersion(res: IncomingMessage, failures: Failure[], options: HttpProbeOptions) {
 
   const actual = res.httpVersion;
   const expected = options.expectHttpVersion;
-  if (expected && String(actual) === String(expected)) {
+  if (expected === undefined || String(actual) === String(expected)) {
     return;
   }
 

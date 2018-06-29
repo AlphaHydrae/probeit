@@ -1,0 +1,11 @@
+{
+  "ext": "js",
+  "ignore": [
+    ".git",
+    "node_modules"
+  ],
+  "watch": [
+    "bin/probeit",
+    "lib/**/*.js"
+  ]
+}

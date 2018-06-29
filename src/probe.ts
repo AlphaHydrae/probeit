@@ -1,15 +1,16 @@
 import { Context } from 'koa';
 
+import { Config } from './config';
 import { getProbe, getProbeOptions } from './probes';
-import { buildMetric, compareMetrics } from './utils';
+import { buildMetric, compareMetrics, ProbeResult } from './utils';
 
-exports.probe = async function(target: string, config, ctx: Context) {
+export async function probe(target: string, config: Config, ctx?: Context): Promise<ProbeResult> {
 
-  const probe = getProbe(target);
+  const probeFunc = getProbe(target);
   const start = new Date().getTime();
   const options = await getProbeOptions(target, config, ctx);
 
-  const result = await probe(target, options);
+  const result = await probeFunc(target, options);
 
   result.metrics.push(buildMetric(
     'duration',
@@ -21,4 +22,4 @@ exports.probe = async function(target: string, config, ctx: Context) {
   result.metrics.sort(compareMetrics);
 
   return result;
-};
+}

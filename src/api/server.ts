@@ -1,11 +1,12 @@
-const Koa = require('koa');
-const { includes } = require('lodash');
+import * as Koa from 'koa';
+import { includes } from 'lodash';
 
-const { probe } = require('../probe');
-const { toPrometheusMetrics } = require('../prometheus');
-const { parseBooleanParam } = require('../utils');
+import { Config } from '../config';
+import { probe } from '../probe';
+import { toPrometheusMetrics } from '../prometheus';
+import { parseBooleanParam } from '../utils';
 
-exports.start = function(config) {
+export function start(config: Config) {
 
   const app = new Koa();
   const logger = config.getLogger('server');
@@ -25,7 +26,7 @@ exports.start = function(config) {
     const result = await probe(target, config, ctx);
 
     if (ctx.path === '/metrics') {
-      ctx.body = toPrometheusMetrics(result, pretty);
+      ctx.body = toPrometheusMetrics(result, !!pretty);
       ctx.set('Content-Type', 'text/plain; version=0.0.4');
     } else if (pretty) {
       ctx.body = JSON.stringify(result, undefined, 2);
@@ -37,14 +38,10 @@ exports.start = function(config) {
 
   app.on('error', err => logger.warn(err.stack));
 
-  return new Promise((resolve, reject) => {
-    app.listen(config.port, err => {
-      if (err) {
-        reject(err);
-      } else {
-        logger.info(`Listening on port ${config.port}`);
-        resolve();
-      }
+  return new Promise(resolve => {
+    app.listen(config.port, () => {
+      logger.info(`Listening on port ${config.port}`);
+      resolve();
     });
   });
-};
+}

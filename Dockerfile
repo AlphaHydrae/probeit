@@ -1,8 +1,17 @@
 FROM node:10.5.0-alpine as builder
 
+ENV WEBPACK_MODE=production
+
 COPY bin/ /usr/src/app/bin/
 COPY package.json package-lock.json /usr/src/app/
 COPY src/ /usr/src/app/src/
+COPY tsconfig.json webpack.js /usr/src/app/
+
+WORKDIR /usr/src/app
+
+RUN npm install && \
+    npm run build && \
+    rm -fr node_modules src tsconfig.json webpack.js
 
 FROM node:10.5.0-alpine
 

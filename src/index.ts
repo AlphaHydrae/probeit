@@ -1,18 +1,15 @@
-const { red } = require('chalk');
+import chalk from 'chalk';
 
-const { probe: probeCli } = require('./api/cli');
-const { start: startServer } = require('./api/server');
-const { parse: parseArgs } = require('./cli');
-const { load: loadConfig } = require('./config');
+import { probeCli } from './api/cli';
+import { start as startServer } from './api/server';
+import { parse as parseArgs } from './cli';
+import { load as loadConfig } from './config';
 
-exports.bin = function() {
-  return Promise.resolve().then(exports.run).catch(err => console.error(red(err.stack)));
-};
+export function bin() {
+  return Promise.resolve().then(exports.run).catch(err => console.error(chalk.red(err.stack)));
+}
 
-exports.loadConfig = loadConfig;
-exports.parseArgs = parseArgs;
-
-exports.run = async function() {
+export async function run() {
 
   const options = parseArgs();
   const config = await loadConfig(options);
@@ -22,6 +19,6 @@ exports.run = async function() {
   } else {
     await startServer(config);
   }
-};
+}
 
-exports.startServer = startServer;
+export { loadConfig, parseArgs, probeCli, startServer };

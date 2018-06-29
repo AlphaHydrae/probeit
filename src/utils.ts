@@ -71,7 +71,10 @@ export interface ProbeResult {
   success: boolean;
 }
 
-export function buildMetric(name: string, type: MetricType, value: boolean | number | string | null, description: string, tags: { [key: string]: string } = {}): Metric {
+export function buildMetric(name: string, type: 'datetime', value: string | null, description: string, tags?: { [key: string]: string }): DatetimeMetric;
+export function buildMetric(name: string, type: 'boolean', value: boolean | null, description: string, tags?: { [key: string]: string }): BooleanMetric;
+export function buildMetric(name: string, type: 'bytes' | 'number' | 'quantity' | 'seconds', value: number | null, description: string, tags?: { [key: string]: string }): NumberMetric;
+export function buildMetric(name: string, type: MetricType, value: boolean | number | string | null, description: string, tags: { [key: string]: string } = {}): any {
   if (typeof name !== 'string') {
     throw new Error(`Metric name must be a string, got ${typeof name}`);
   } else if (!name.match(/^[a-z0-9]+(?:[A-Z0-9][a-z0-9]+)*$/)) {
@@ -137,8 +140,12 @@ export async function loadConfig(file: string) {
   }
 }
 
-export function parseBooleanParam(value: string | undefined, defaultValue: boolean | null = false): boolean | null {
-  return typeof value === 'string' ? !!value.match(/^1|y|yes|t|true$/i) : defaultValue;
+export function parseBooleanParam(value: boolean | number | string | undefined, defaultValue: boolean | null = false): boolean | null {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  return typeof value === 'boolean' ? value : !!String(value).match(/^1|y|yes|t|true$/i);
 }
 
 export function parseHttpParams(value: string | string[] | undefined, defaultValue = {}) {
@@ -162,13 +169,13 @@ export function parseHttpParams(value: string | string[] | undefined, defaultVal
   return params;
 }
 
-export function promisified<T>(nodeStyleFunc: (...args: any[]) => T, context: any, ...args: any[]) {
-  return promisify<T>(nodeStyleFunc, context)(...args);
+export function promisified<T>(nodeStyleFunc: (...args: any[]) => any, ...args: any[]) {
+  return promisify<T>(nodeStyleFunc)(...args);
 }
 
-export function promisify<T>(nodeStyleFunc: (...args: any[]) => T, context: any) {
+export function promisify<T>(nodeStyleFunc: (...args: any[]) => any) {
   return (...args: any[]): Promise<T> => new Promise((resolve, reject) => {
-    nodeStyleFunc.call(context, ...args, (err: Error, result: T) => {
+    nodeStyleFunc(...args, (err: Error, result: T) => {
       if (err) {
         reject(err);
       } else {
@@ -186,7 +193,7 @@ export function toArray<T>(value: T | undefined): T[] {
   return isArray(value) ? value : [ value ];
 }
 
-export function increase(counters: { [key: string]: number }, key: string, by: number) {
+export function increase(counters: { [key: string]: number | undefined }, key: string, by: number) {
   counters[key] = (counters[key] || 0) + by;
 }
 

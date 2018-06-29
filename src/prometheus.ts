@@ -54,7 +54,8 @@ export function toPrometheusMetrics(result: ProbeResult, pretty: boolean) {
     lines.push('probe_failures 0');
   }
 
-  const failureCountsByCause = result.failures.reduce((memo, failure) => ({ ...memo, [failure.cause]: (memo[failure.cause] || 0) + 1 }), {});
+  const noCounts: { [key: string]: number } = {};
+  const failureCountsByCause = result.failures.reduce((memo, failure) => ({ ...memo, [failure.cause]: (memo[failure.cause] || 0) + 1 }), noCounts);
   each(failureCountsByCause, (value, key) => {
     lines.push(`probe_failures{cause="${key}"} ${value}`);
   });

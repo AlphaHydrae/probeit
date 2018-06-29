@@ -1,19 +1,32 @@
 import { readFile } from 'fs-extra';
 import { has, isInteger, merge, pick } from 'lodash';
-import * as log4js from 'log4js';
+import { getLogger, Logger } from 'log4js';
 
+import { HttpProbeOptions } from './probes/http';
+import { S3ProbeOptions } from './probes/s3';
 import { loadConfig } from './utils';
 
 const defaultConfigFile = 'config.yml';
 
-exports.load = async function(options = {}) {
+export interface Config extends HttpProbeOptions, S3ProbeOptions {
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  config?: string;
+  logLevel?: string;
+  port?: number;
+  presets?: string;
+  pretty?: boolean;
+  getLogger(name: string): Logger;
+}
+
+export async function load(options: Partial<Config> = {}): Promise<Config> {
 
   const fromEnvironment = {
     awsAccessKeyId: firstResolvedValue(getEnv('PROBE_AWS_ACCESS_KEY_ID'), getEnv('AWS_ACCESS_KEY_ID')),
     awsSecretAccessKey: firstResolvedValue(getEnv('PROBE_AWS_SECRET_ACCESS_KEY'), getEnv('AWS_SECRET_ACCESS_KEY')),
     config: getEnv('PROBE_CONFIG'),
     logLevel: getEnv('PROBE_LOG_LEVEL'),
-    port: firstResolvedValue(parseConfigInt(getEnv('PROBE_PORT')), parseConfigInt(getEnv('PORT'))),
+    port: firstResolvedValue(getEnv('PROBE_PORT'), getEnv('PORT')).then(parseConfigInt),
     presets: getEnv('PROBE_PRESETS'),
     pretty: getEnv('PROBE_PRETTY')
   };
@@ -26,9 +39,7 @@ exports.load = async function(options = {}) {
   const resolved = await Promise.all([ fromFilePromise, ...fromEnvironmentValues ]);
   const fromFile = resolved.shift();
 
-  for (let i = 0; i < fromEnvironmentKeys.length; i++) {
-    fromEnvironment[fromEnvironmentKeys[i]] = resolved[i];
-  }
+  const resolvedFromEnvironment = fromEnvironmentKeys.reduce((memo, key, i) => ({ ...memo, [key]: resolved[i] }), {});
 
   const defaults = {
     logLevel: 'INFO',
@@ -36,47 +47,52 @@ exports.load = async function(options = {}) {
     presets: 'presets/**/*.@(json|yml)'
   };
 
-  const config = validateConfig(merge(
+  const config = merge(
     {},
-    validateConfig(defaults, false),
-    validateConfig(fromFile, false),
-    validateConfig(fromEnvironment, false),
-    validateConfig(options, false)
-  ));
+    validatePartialConfig(defaults),
+    validatePartialConfig(fromFile),
+    validatePartialConfig(resolvedFromEnvironment),
+    validatePartialConfig(options)
+  );
 
   config.getLogger = createLoggerFactory(config);
 
-  return config;
-};
+  if (validateConfig(config)) {
+    return config;
+  } else {
+    throw new Error('Configuration is invalid');
+  }
+}
 
-exports.whitelist = whitelistConfig;
+export { whitelistConfig as whitelist };
 
-function createLoggerFactory(config) {
-  return function(name) {
-    const logger = log4js.getLogger(name);
-    logger.level = config.logLevel;
+function createLoggerFactory(config: Partial<Config>) {
+  return function(name: string) {
+    const logger = getLogger(name);
+    logger.level = config.logLevel || 'INFO';
     return logger;
   };
 }
 
-async function firstResolvedValue(...values) {
+async function firstResolvedValue<T = any>(...values: Array<T | Promise<T | undefined> | undefined>): Promise<T | undefined> {
   return (await Promise.all(values)).find(value => value !== undefined);
 }
 
-function getEnv(varName) {
+function getEnv(varName: string): string | Promise<string> | undefined {
   if (has(process.env, varName)) {
     return process.env[varName];
   }
 
   const fileVarName = `${varName}_FILE`;
-  if (!has(process.env, fileVarName)) {
-    return undefined;
+  const file = process.env[fileVarName];
+  if (file === undefined) {
+    return;
   }
 
-  return readFile(process.env[fileVarName], 'utf8').trim();
+  return readFile(file, 'utf8').then(contents => contents.trim());
 }
 
-async function loadConfigFile(file, optional) {
+async function loadConfigFile(file: string, optional: boolean) {
   try {
     return await loadConfig(file);
   } catch (err) {
@@ -90,7 +106,7 @@ async function loadConfigFile(file, optional) {
   }
 }
 
-async function parseConfigInt(value, defaultValue) {
+async function parseConfigInt(value: string | undefined, defaultValue?: number | null) {
   if (value === undefined) {
     return defaultValue;
   }
@@ -103,11 +119,15 @@ async function parseConfigInt(value, defaultValue) {
   return parsed;
 }
 
-function validateConfig(config) {
+function validatePartialConfig(config: Partial<Config>): Partial<Config> {
   return config;
 }
 
-function whitelistConfig(config) {
+function validateConfig(config: Partial<Config>): config is Config {
+  return config !== undefined;
+}
+
+function whitelistConfig<T extends object = any>(config: T): Partial<Config> {
   return pick(
     config,
     // General options

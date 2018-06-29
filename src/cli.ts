@@ -1,9 +1,13 @@
-const yargs = require('yargs');
+import * as yargs from 'yargs';
 
-const { whitelist } = require('./config');
-const { parseBooleanParam } = require('./utils');
+import { Config, whitelist } from './config';
+import { parseBooleanParam } from './utils';
 
-exports.parse = function() {
+export interface CliOptions extends Partial<Config> {
+  target?: string;
+}
+
+export function parse(): CliOptions {
 
   const args = yargs
 
@@ -58,7 +62,7 @@ exports.parse = function() {
     .option('headers', {
       alias: 'header',
       array: true,
-      coerce: headers => headers.map(header => header.split('=', 2)).reduce((memo, value) => ({ ...memo, [value[0]]: value[1] || '' }), {}),
+      coerce: headers => headers.map((header: string) => header.split('=', 2)).reduce((memo: { [key: string]: string }, value: string[]) => ({ ...memo, [value[0]]: value[1] || '' }), {}),
       default: [],
       describe: 'HTTP header to add to the probe\'s request (e.g. "Authorization=Basic YWRtaW46Y2hhbmdlbWUh")',
       group: 'HTTP probe parameters',
@@ -146,4 +150,4 @@ exports.parse = function() {
     ...whitelist(args),
     target: args._[0]
   };
-};
+}
