@@ -1,5 +1,6 @@
 import * as Koa from 'koa';
 import { includes } from 'lodash';
+import { ValidationErrorBundle } from 'valany';
 
 import { Config } from '../config';
 import { getLogger } from '../logger';
@@ -11,6 +12,22 @@ export function startServer(config: Config) {
 
   const app = new Koa();
   const logger = getLogger('server', config);
+
+  app.use(async (ctx, next) => {
+    try {
+      await next();
+    } catch (err) {
+      if (err instanceof ValidationErrorBundle) {
+        ctx.status = 400;
+        ctx.body = {
+          message: 'Parameter validation failed',
+          errors: err.errors.map(e => ({ ...e, message: e.message }))
+        };
+      } else {
+        throw err;
+      }
+    }
+  });
 
   app.use(async ctx => {
     if (!includes([ '/', '/metrics' ], ctx.path)) {

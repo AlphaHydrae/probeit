@@ -119,7 +119,7 @@ function validateConfig(config: Raw<Config>): Config {
     presets: validateStringOption(config, 'presets'),
     pretty: validateBooleanOption(config, 'pretty'),
     logLevel: validateLogLevelOption(config),
-    ...validateHttpProbeOptions(config),
+    // ...validateHttpProbeOptions(config),
     ...validateS3ProbeOptions(config)
   };
 }

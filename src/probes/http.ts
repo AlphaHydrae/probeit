@@ -5,6 +5,7 @@ import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, last,
 import * as moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
+import { addErrors, array, compose, eachPropertyPathParallel, format, hasValue, isolate, mapLocationValue, numeric, parallel, propertyPath, string, validate, Validator, when, whenOr } from 'valany';
 
 import { Config } from '../config';
 import { buildMetric, Metric } from '../metrics';
@@ -101,14 +102,17 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
     method: 'GET'
   };
 
-  // TODO: fix array merge
-  return validateHttpProbeOptions(merge(
-    {},
-    validateHttpProbeOptions(defaultOptions),
-    pick(validateHttpProbeOptions(config), ...optionNames),
-    pick(validateHttpProbeOptions(presetOptions), ...optionNames),
-    validateHttpProbeOptions(queryOptions)
-  ));
+  // FIXME: fix array merge
+  return validate(
+    merge(
+      {},
+      await validate(defaultOptions, validateHttpProbeOptions()),
+      await validate(whitelistHttpProbeOptions(config), validateHttpProbeOptions()),
+      await validate(whitelistHttpProbeOptions(presetOptions), validateHttpProbeOptions()),
+      await validate(queryOptions, validateHttpProbeOptions())
+    ),
+    validateHttpProbeOptions()
+  );
 }
 
 export async function probeHttp(target: string, options: HttpProbeOptions) {
@@ -116,22 +120,95 @@ export async function probeHttp(target: string, options: HttpProbeOptions) {
   return getHttpMetrics(probeData.req, probeData.res, probeData.state, options);
 }
 
-export function validateHttpProbeOptions(options: Raw<HttpProbeOptions>): HttpProbeOptions {
-  return {
-    allowUnauthorized: validateBooleanOption(options, 'allowUnauthorized'),
-    expectHttpRedirects: validateExpectHttpRedirectsOption(options),
-    expectHttpRedirectTo: validateStringOption(options, 'expectHttpRedirectTo'),
-    // TODO: parse as RegExps
-    expectHttpResponseBodyMatch: validateStringArrayOption(options, 'expectHttpResponseBodyMatch'),
-    expectHttpResponseBodyMismatch: validateStringArrayOption(options, 'expectHttpResponseBodyMismatch'),
-    expectHttpSecure: validateBooleanOption(options, 'expectHttpSecure'),
-    // TODO: parse this correctly
-    expectHttpStatusCode: validateExpectHttpStatusCodeOption(options),
-    expectHttpVersion: validateStringOption(options, 'expectHttpVersion'),
-    followRedirects: validateBooleanOption(options, 'followRedirects'),
-    headers: validateHeadersOption(options),
-    method: validateStringOption(options, 'method')
-  };
+export function validateHttpProbeOptions(): Validator<any, any> {
+  return parallel(
+    validateOption('allowUnauthorized', booleanParam()),
+    validateOption('expectHttpRedirects', validateExpectHttpRedirects()),
+    validateOption('expectHttpRedirectTo', string(1)),
+      // TODO: parse as RegExps
+    validateOption('expectHttpResponseBodyMatch', stringArray()),
+    validateOption('expectHttpResponseBodyMismatch', stringArray()),
+    validateOption('expectHttpSecure', booleanParam()),
+      // TODO: parse this correctly
+    validateOption('expectHttpStatusCode', validateExpectHttpStatusCode()),
+    validateOption('expectHttpVersion', string(1)),
+    validateOption('followRedirects', booleanParam()),
+    validateOption('headers', validateHttpHeaders()),
+    validateOption('method', string(1))
+  );
+}
+
+export function whitelistHttpProbeOptions(options: Raw<HttpProbeOptions>): HttpProbeOptions {
+  return pick(options, ...optionNames) as HttpProbeOptions;
+}
+
+export function validateExpectHttpRedirects(): Validator<any, any> {
+  return whenOr(
+    // condition
+    hasValue(value => typeof value === 'boolean' || isFalseString(value) || isTrueString(value)),
+    // when...
+    mapLocationValue((value: any) => typeof value === 'boolean' ? value : isTrueString(value)),
+    // or...
+    compose(numeric({ coerce: true, integer: true, min: 0 }), mapLocationValue(Number))
+  );
+}
+
+export function validateExpectHttpStatusCode(): Validator<any, any> {
+  return compose(
+    array(),
+    eachPropertyPathParallel(
+      whenOr(
+        hasValue(value => isFinite(Number(value))),
+        numeric('integer', 0),
+        format(httpStatusCodeRangeRegExp, '1xx, 2xx, 3xx, 4xx or 5xx.')
+      )
+    )
+  );
+}
+
+export function validateHttpHeaders(): Validator<any, any> {
+  return compose(
+    whenOr(
+      hasValue(isPlainObject),
+      eachPropertyPathParallel(
+        array(),
+        string()
+      ),
+      addErrors({ message: 'Must be a map of header names and values', validator: 'httpHeaders' })
+    )
+  );
+}
+
+export function booleanParam(): Validator<any, any> {
+  return when(
+    hasValue(value => value !== undefined && typeof value !== 'boolean'),
+    whenOr(
+      hasValue(value => isFalseString(value) || isTrueString(value)),
+      mapLocationValue(isTrueString),
+      addErrors({ message: 'must be a boolean or a boolean-like string (1/0, y/n, yes/no, t/f or true/false)', validator: 'boolean' })
+    )
+  );
+}
+
+export function stringArray(): Validator<any, any> {
+  return compose(
+    array(),
+    context => console.log('@@@', JSON.stringify(context.state.location.relativePath)),
+    eachPropertyPathParallel(
+      context => console.log('@@@', JSON.stringify(context.state.location.relativePath)),
+      string(1)
+    )
+  );
+}
+
+export function validateOption(path: string, ...validators: Array<Validator<any, any>>): Validator<any, any> {
+  return isolate(
+    propertyPath(path),
+    when(
+      hasValue(value => value !== undefined),
+      ...validators
+    )
+  );
 }
 
 function performHttpProbe(target: string, options: HttpProbeOptions, state: HttpProbeState = { counters: {}, requests: [] }): Promise<HttpProbeData> {
@@ -279,29 +356,6 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
   ));
 
   return { failures, metrics, success };
-}
-
-function validateExpectHttpRedirectsOption(options: Raw<HttpProbeOptions>): ExpectHttpRedirects | undefined {
-
-  const value = options.expectHttpRedirects;
-  if (value === undefined) {
-    return;
-  } else if (typeof value === 'boolean') {
-    return value;
-  } else if (typeof value !== 'number' && typeof value !== 'string') {
-    throw new Error(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${typeof value}`);
-  } else if (isFalseString(value)) {
-    return false;
-  } else if (isTrueString(value)) {
-    return true;
-  }
-
-  const n = Number(value);
-  if (!isInteger(n) || n < 0) {
-    throw new Error(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${value}`);
-  }
-
-  return n;
 }
 
 function validateExpectHttpStatusCodeOption(options: Raw<HttpProbeOptions>): ExpectHttpStatusCode | undefined {
