@@ -457,7 +457,9 @@ function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], optio
   }
 
   for (const code of expected) {
-    if (typeof code !== 'string') {
+    if (actual === code) {
+      return;
+    } else if (typeof code !== 'string') {
       continue;
     }
 
