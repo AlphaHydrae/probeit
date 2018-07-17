@@ -14,6 +14,7 @@
     "build:webpack": "webpack-cli --config webpack.js",
     "dev": "concurrently \"npm run build:watch\" \"npm run start:watch\"",
     "doctoc": "doctoc --notitle --github README.md",
+    "heroku-postbuild": "npm run build",
     "lint": "tslint -c tslint.json -p tsconfig.json -t stylish \"src/**/*.ts\"",
     "lint:watch": "onchange \"src/**/*.ts\" -- npm run lint",
     "prepublishOnly": "npm run lint && npm run build",
