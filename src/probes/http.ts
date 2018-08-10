@@ -5,6 +5,7 @@ import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, last,
 import * as moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
+import * as urlJoin from 'url-join';
 
 import { Config } from '../config';
 import { buildMetric, Metric } from '../metrics';
@@ -176,8 +177,15 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
         }
 
         if (options.followRedirects && res.statusCode && res.statusCode >= 301 && res.statusCode <= 302 && res.headers.location) {
+
           increase(state.counters, 'redirects', 1);
-          resolve(performHttpProbe(res.headers.location, options, state));
+
+          let location = res.headers.location;
+          if (!location.match(/^(https?:\/\/|\/\/)/)) {
+            location = urlJoin(target, location);
+          }
+
+          resolve(performHttpProbe(location, options, state));
         } else {
           resolve({ req, state, res: Object.assign(Object.create(res), { body }) });
         }
@@ -201,7 +209,7 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
       });
     });
 
-    req.on('error', () => {
+    req.on('error', err => {
       resolve({ req, state });
     });
 
