@@ -12,6 +12,7 @@ export interface Failure {
   cause: string;
   description: string;
   expected?: any;
+  [key: string]: any;
 }
 
 export interface HttpParams {

@@ -48,19 +48,43 @@ export async function probeCommand(target: string, options: CommandProbeOptions)
 
   const command = options.command;
   if (command.type === 'function') {
-    return command.command();
+
+    try {
+      return await command.command();
+    } catch (err) {
+
+      failures.push({
+        cause: 'functionCommandError',
+        description: 'The function could not be executed',
+        stack: err.stack
+      });
+
+      return { failures, metrics, success: false };
+    }
   }
 
-  const result = await executeSystemCommand(command.command, command.args, {
-    cwd: command.cwd
-  });
+  let code = -1;
+  let success = false;
 
-  const success = result.code === 0;
+  try {
+
+    const result = await executeSystemCommand(command.command, command.args, {
+      cwd: command.cwd
+    });
+
+    code = result.code;
+    success = code === 0;
+  } catch (err) {
+    failures.push({
+      cause: 'systemCommandError',
+      description: 'The command could not be executed'
+    });
+  }
 
   metrics.push(buildMetric(
     'commandExitCode',
     'number',
-    result.code,
+    code,
     'The exit code of the executed command'
   ));
 
@@ -71,7 +95,7 @@ function executeSystemCommand(command: string, args?: string[], options?: SpawnO
 
   const spawned = spawn(command, args, options);
 
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
 
     let stdout = '';
     let stderr = '';
@@ -83,6 +107,8 @@ function executeSystemCommand(command: string, args?: string[], options?: SpawnO
     spawned.stderr.on('data', data => {
       stderr += data;
     });
+
+    spawned.on('error', reject);
 
     spawned.on('close', code => {
       resolve({
