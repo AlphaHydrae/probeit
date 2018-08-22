@@ -1,4 +1,4 @@
-FROM node:10.5.0-alpine as builder
+FROM node:10.9.0-alpine as builder
 
 ENV WEBPACK_MODE=production
 
@@ -13,7 +13,7 @@ RUN npm install && \
     npm run build && \
     rm -fr node_modules src tsconfig.json webpack.js
 
-FROM node:10.5.0-alpine
+FROM node:10.9.0-alpine
 
 WORKDIR /usr/src/app/
 

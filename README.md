@@ -1,14 +1,15 @@
 # Probe It
 
-Probe HTTP URLs and [AWS](https://aws.amazon.com)
+Execute system commands or probe HTTP URLs and [AWS](https://aws.amazon.com)
 [S3](https://aws.amazon.com/s3/) buckets to produce metrics in JSON or for
-[Prometheus](https://prometheus.io). Can be used on the command line or as a server.
+[Prometheus](https://prometheus.io). Can be used on the command line or as a
+server.
 
 Inspired by [Prometheus Blackbox
 Exporter](https://github.com/prometheus/blackbox_exporter).
 
 [![npm version](https://badge.fury.io/js/probeit.svg)](https://badge.fury.io/js/probeit)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
+[![license](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -20,6 +21,10 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
   - [Prometheus format](#prometheus-format)
   - [Generic metrics](#generic-metrics)
     - [`duration`](#duration)
+- [Command probe](#command-probe)
+  - [System commands](#system-commands)
+    - [System command metrics](#system-command-metrics)
+    - [`commandExitCode`](#commandexitcode)
 - [HTTP probe](#http-probe)
   - [HTTP probe metrics](#http-probe-metrics)
     - [`httpCertificateExpiry`](#httpcertificateexpiry)
@@ -32,8 +37,8 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
   - [HTTP probe parameters](#http-probe-parameters)
     - [`allowUnauthorized`](#allowunauthorized)
     - [`followRedirects`](#followredirects)
-    - [`method`](#method)
     - [`header`](#header)
+    - [`method`](#method)
   - [HTTP probe expectations](#http-probe-expectations)
     - [`expectHttpRedirects`](#expecthttpredirects)
     - [`expectHttpRedirectTo`](#expecthttpredirectto)
@@ -225,6 +230,140 @@ How long the probe took to complete in seconds.
   "tags": {},
   "type": "seconds",
   "value": 0.12
+}
+```
+
+
+
+## Command probe
+
+The command probe is used when the target is an URI that starts with `command:`,
+e.g. `command:foo`. This will execute the command named `foo` and return its
+metrics.
+
+Named commands must be pre-defined with the `commands` property of Probe It's
+configuration file (`config.yml` by default, or the file indicated by the `-c,
+--config <FILE>` command line option or the `$PROBE_CONFIG` environment
+variable). The property is an object in which keys are command names and values
+are the definitions of the commands to run:
+
+```yml
+commands:
+  lsRoot:
+    type: system
+    command: ls
+    args: [ -la, / ]
+  unameAll
+    type: system
+    command: uname
+    args: [ -a ]
+```
+
+The following command types are supported:
+
+* Arbitrary [JavaScript functions](#function-commands) to be executed by Probe It.
+* [System commands](#system-commands) to spawn in a new process.
+
+
+
+### Function commands
+
+If your configuration file is a JavaScript file instead of a JSON or YAML file,
+you can also define a command to probe as an arbitrary JavaScript function:
+
+```js
+exports.commands = {
+  doStuff: {
+    type: 'function',
+    command: async function() {
+
+      try {
+        // Read metrics from a file
+        const metrics = await fs.Promises.readFile('/metrics.json', 'utf8');
+        return {
+          metrics,
+          failures: [],
+          success: true
+        };
+      } catch (err) {
+        // Describe possible failure
+        return {
+          failures: [
+            cause: "invalidMetricsFile",
+            description: "Could not read metrics file"
+          ],
+          metrics: [],
+          success: false
+        };
+      }
+    }
+  }
+};
+```
+
+The function may be synchronous or asynchronous, and must return an object with
+the following properties:
+
+* **`metrics`** - An array of objects describin the metrics produced by running
+  the command. Each metrics object must be in the [correct format](#metrics).
+* **`failures`** - An array of objects describing reasons why the probe failed
+  (it may be empty). Each failure object must have:
+
+  * A `cause` property which is a string code identifying the failure.
+  * A human-readable `description` property.
+  * An optional `expected` property indicating the expected value.
+  * An optional `actual` property indicating the actual value which differs from
+    the expected one.
+  * Optional extra properties describing the failure.
+* **`success`** - `true` or `false` to indicate whether the probe succeeded.
+
+
+
+### System commands
+
+System commands are commands that will be spawned in a new process on the
+machine on which Probe It is running. They can be defined with all configuration
+file formats (JavaScript, JSON or YAML), for example in JSON:
+
+```json
+{
+  "commands": {
+    "lsRoot": {
+      "type": "system",
+      "command": "ls",
+      "args": [ "-la", "/" ],
+      "cwd": "/"
+    }
+  }
+}
+```
+
+The following options describe a system command:
+
+* **`command`** - The executable to run.
+* **`args`** - An optional array of arguments to pass to the executable.
+* **`cwd`** - An optional working directory to run the executable in.
+
+
+
+#### System command metrics
+
+The following sub-headings document the metrics provided by a system command probe.
+
+#### `commandExitCode`
+
+**Type:** number
+
+The exit code of the executed command. `0` indicates successful execution, while
+and non-zero code indicates some kind of failure.
+
+```json
+{
+  "description": "...",
+  "name": "commandExitCode",
+  "tags": {},
+  "type": "number",
+  "value": 0
 }
 ```
 

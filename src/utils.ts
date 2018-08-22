@@ -1,9 +1,11 @@
 import { readFile } from 'fs-extra';
 import { safeLoad as parseYaml } from 'js-yaml';
-import { has, isArray, isFinite, isInteger, merge, uniq } from 'lodash';
-import { extname } from 'path';
+import { has, isArray, isFinite, isInteger, isPlainObject, merge, uniq } from 'lodash';
+import * as nativeRequire from 'native-require';
+import { extname, resolve as resolvePath } from 'path';
 
 import { Metric } from './metrics';
+import { FunctionCommand, ProbeCommand, SystemCommand } from './probes/command';
 
 export interface Failure {
   actual?: any;
@@ -69,7 +71,10 @@ export function isTrueString(value: any): boolean {
 }
 
 export async function loadConfig(file: string) {
-  if (file.match(/\.json$/)) {
+  if (file.match(/\.js$/)) {
+    const config = nativeRequire(resolvePath(file));
+    return typeof config === 'function' ? config() : config;
+  } else if (file.match(/\.json$/)) {
     return JSON.parse(await readFile(file, 'utf8'));
   } else if (file.match(/\.ya?ml$/)) {
     return parseYaml(await readFile(file, 'utf8'));
@@ -151,6 +156,40 @@ export function validateArrayOption<T, O, K extends keyof O>(options: O, name: K
   }
 
   return value;
+}
+
+export function validateCommand(command: any, name: string): ProbeCommand {
+  if (!isPlainObject(command)) {
+    throw new Error(`Command "${name}" must be a plain object; got ${typeof(command)}`);
+  } else if (command.type === 'function') {
+    return validateFunctionCommand(command, name);
+  } else if (command.type === 'system') {
+    return validateSystemCommand(command, name);
+  } else {
+    throw new Error(`Command "${name}" must have a "type" property with the value "function" or "system"; got ${JSON.stringify(command.type)}`);
+  }
+}
+
+export function validateFunctionCommand(command: any, name: string): FunctionCommand {
+  if (typeof command.command !== 'function') {
+    throw new Error(`Command "${name}" must have a "command" property that is a function; got ${typeof command.command}`);
+  }
+
+  return command;
+}
+
+export function validateSystemCommand(command: any, name: string): SystemCommand {
+  if (typeof command.command !== 'string') {
+    throw new Error(`Command "${name}" must have a "command" property that is a string; got ${typeof command.command}`);
+  } else if (command.args !== undefined && !isArray(command.args)) {
+    throw new Error(`The "args" property of command "${name}" must be an array; got ${typeof command.args}`);
+  } else if (isArray(command.args) && command.args.some((arg: any) => typeof arg !== 'string')) {
+    throw new Error(`The "args" array of command "${name}" must contain only strings`);
+  } else if (command.cwd !== undefined && typeof command.cwd !== 'string') {
+    throw new Error(`The "cwd" property of command "${name}" must be a string; got ${typeof command.cwd}`);
+  }
+
+  return command;
 }
 
 export function validateBooleanOption<O, K extends keyof O>(options: O, name: K): boolean | undefined {

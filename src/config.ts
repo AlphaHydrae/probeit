@@ -1,10 +1,11 @@
 import { readFile } from 'fs-extra';
-import { merge, pick } from 'lodash';
+import { isPlainObject, merge, pick, reduce } from 'lodash';
 
 import { LoggerOptions, LogLevel, validateLogLevelOption } from './logger';
+import { ProbeCommand } from './probes/command';
 import { HttpProbeOptions, validateHttpProbeOptions } from './probes/http';
 import { S3ProbeOptions, validateS3ProbeOptions } from './probes/s3';
-import { compactResolved, firstResolved, loadConfig, parseHttpParams, Raw, validateBooleanOption, validateNumericOption, validateStringOption } from './utils';
+import { compactResolved, firstResolved, loadConfig, parseHttpParams, Raw, validateBooleanOption, validateCommand, validateNumericOption, validateStringOption } from './utils';
 
 const defaultConfigFile = 'config.yml';
 
@@ -16,6 +17,7 @@ export interface GeneralOptions {
 }
 
 export interface Config extends GeneralOptions, HttpProbeOptions, LoggerOptions, S3ProbeOptions {
+  commands?: { [key: string]: ProbeCommand };
   config?: string;
   port?: number;
   presets?: string;
@@ -114,6 +116,8 @@ function validateConfig(config: Raw<Config>): Config {
   return {
     awsAccessKeyId: validateStringOption(config, 'awsAccessKeyId'),
     awsSecretAccessKey: validateStringOption(config, 'awsSecretAccessKey'),
+    // FIXME: validate commands
+    commands: validateCommands(config.commands),
     config: validateStringOption(config, 'config'),
     port: validateNumericOption(config, 'port', true, 0, 65535),
     presets: validateStringOption(config, 'presets'),
@@ -124,12 +128,22 @@ function validateConfig(config: Raw<Config>): Config {
   };
 }
 
+function validateCommands(commands: any): { [key: string]: ProbeCommand } {
+  if (!isPlainObject) {
+    throw new Error(`The "commands" property of the configuration file must be a plain object; got ${typeof commands}`);
+  }
+
+  return reduce(commands, (memo, value, key) => ({ ...memo, [key]: validateCommand(value, key) }), {});
+}
+
 function whitelistConfig<T extends object = any>(config: T): Partial<Config> {
   return pick(
     config,
     // General options
     'awsAccessKeyId', 'awsSecretAccessKey',
     'config', 'logLevel', 'port', 'presets', 'pretty',
+    // Commands
+    'commands',
     // HTTP probe parameters
     'allowUnauthorized', 'followRedirects', 'headers', 'method',
     // HTTP probe expectations
