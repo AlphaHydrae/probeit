@@ -22,6 +22,7 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
   - [Generic metrics](#generic-metrics)
     - [`duration`](#duration)
 - [Command probe](#command-probe)
+  - [Function commands](#function-commands)
   - [System commands](#system-commands)
     - [System command metrics](#system-command-metrics)
     - [`commandExitCode`](#commandexitcode)
@@ -266,7 +267,7 @@ The following command types are supported:
 
 
 
-### Function commands
+### Function commands
 
 If your configuration file is a JavaScript file instead of a JSON or YAML file,
 you can also define a command to probe as an arbitrary JavaScript function:
