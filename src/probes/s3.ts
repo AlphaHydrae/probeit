@@ -1,7 +1,7 @@
-import * as aws from 'aws-sdk';
+import aws from 'aws-sdk';
 import { Context } from 'koa';
 import { assign, last, merge, pick } from 'lodash';
-import * as moment from 'moment';
+import moment from 'moment';
 import { parse as parseUrl } from 'url';
 
 import { Config, GeneralOptions } from '../config';

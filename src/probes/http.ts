@@ -2,10 +2,10 @@ import { ClientRequest, IncomingMessage, request as requestHttp, RequestOptions 
 import { request as requestHttps } from 'https';
 import { Context } from 'koa';
 import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, isString, last, merge, pick } from 'lodash';
-import * as moment from 'moment';
+import moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
-import * as urlJoin from 'url-join';
+import urlJoin from 'url-join';
 
 import { Config } from '../config';
 import { ProbeOptionError } from '../errors';

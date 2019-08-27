@@ -91,7 +91,7 @@ export async function probeCommand(target: string, options: CommandProbeOptions)
   return { failures, metrics, success };
 }
 
-function executeSystemCommand(command: string, args?: string[], options?: SpawnOptions): Promise<SystemCommandResult> {
+function executeSystemCommand(command: string, args: string[] = [], options: SpawnOptions = {}): Promise<SystemCommandResult> {
 
   const spawned = spawn(command, args, options);
 
@@ -100,13 +100,17 @@ function executeSystemCommand(command: string, args?: string[], options?: SpawnO
     let stdout = '';
     let stderr = '';
 
-    spawned.stdout.on('data', data => {
-      stdout += data;
-    });
+    if (spawned.stdout) {
+      spawned.stdout.on('data', data => {
+        stdout += data;
+      });
+    }
 
-    spawned.stderr.on('data', data => {
-      stderr += data;
-    });
+    if (spawned.stderr) {
+      spawned.stderr.on('data', data => {
+        stderr += data;
+      });
+    }
 
     spawned.on('error', reject);
 

@@ -10,6 +10,8 @@
     "outDir": "lib",
     "sourceMap": true,
     "declaration": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
 
     "forceConsistentCasingInFileNames": true,
     "noImplicitReturns": true,

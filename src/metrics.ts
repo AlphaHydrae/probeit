@@ -1,5 +1,5 @@
 import { isFinite, isInteger, isPlainObject, values as objectValues } from 'lodash';
-import * as moment from 'moment';
+import moment from 'moment';
 
 const METRIC_TYPES = {
   boolean: {

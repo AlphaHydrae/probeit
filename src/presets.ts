@@ -1,4 +1,4 @@
-import * as glob from 'glob-promise';
+import glob from 'glob-promise';
 import { difference, isPlainObject, merge, pick, reduce } from 'lodash';
 
 import { Config } from './config';

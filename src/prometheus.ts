@@ -1,6 +1,6 @@
 import { underscore } from 'inflection';
 import { each, includes, reduce } from 'lodash';
-import * as moment from 'moment';
+import moment from 'moment';
 
 import { Metric } from './metrics';
 import { ProbeResult } from './utils';
