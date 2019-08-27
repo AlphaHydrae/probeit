@@ -63,7 +63,7 @@
     "no-this-assignment": true,
     "no-unexpected-multiline": true,
     "no-unnecessary-callback-wrapper": true,
-    "no-unnecessary-class": [ "allow-empty-class" ],
+    "no-unnecessary-class": [ true, "allow-empty-class" ],
     "no-unnecessary-parens-for-arrow-function-arguments": true,
     "no-unnecessary-qualifier": true,
     "no-unnecessary-type-annotation": true,
