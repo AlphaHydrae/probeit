@@ -181,7 +181,9 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
           increase(state.counters, 'redirects', 1);
 
           let location = res.headers.location;
-          if (!location.match(/^(https?:\/\/|\/\/)/)) {
+          if (location.match(/^\/\/?[^/]/)) {
+            location = urlJoin(target.replace(/^(https?:\/\/[^/]+).*$/, '$1'), location);
+          } else if (!location.match(/^(https?:\/\/|\/\/)/)) {
             location = urlJoin(target, location);
           }
 
