@@ -1,9 +1,10 @@
 import { readFile } from 'fs-extra';
 import { safeLoad as parseYaml } from 'js-yaml';
-import { has, isArray, isFinite, isInteger, isPlainObject, merge, uniq } from 'lodash';
+import { has, isArray, isFinite, isInteger, isPlainObject, isString, merge, uniq } from 'lodash';
 import * as nativeRequire from 'native-require';
 import { extname, resolve as resolvePath } from 'path';
 
+import { ProbeOptionError } from './errors';
 import { Metric } from './metrics';
 import { FunctionCommand, ProbeCommand, SystemCommand } from './probes/command';
 
@@ -147,13 +148,15 @@ export function toArray<T>(value: T | undefined): T[] {
   return isArray(value) ? value : [ value ];
 }
 
-export function validateArrayOption<T, O, K extends keyof O>(options: O, name: K, description: string, validator: (value: any) => boolean): T[] | undefined {
+export function validateArrayOption<T, O extends Record<string, any>, K extends keyof O>(options: O, name: K, description: string, validator: (value: any) => boolean): T[] | undefined {
 
   const value = options[name];
-  if (value !== undefined && !isArray(value)) {
-    throw new Error(`"${name}" option must be an array of ${description}; got ${typeof(value)}`);
-  } else if (isArray(value) && value.some(v => !validator(v))) {
-    throw new Error(`"${name}" option must be an array of ${description} but it contains other types: ${value.map(v => typeof v)}`);
+  if (value === undefined) {
+    return;
+  } else if (!isArray(value)) {
+    throw new ProbeOptionError(`"${name}" option must be an array of ${description}; got ${typeof(value)}`);
+  } else if (!value.every(validator)) {
+    throw new ProbeOptionError(`"${name}" option must be an array of ${description} but it contains other types: ${value.map((v: any) => typeof v)}`);
   }
 
   return value;
@@ -161,19 +164,19 @@ export function validateArrayOption<T, O, K extends keyof O>(options: O, name: K
 
 export function validateCommand(command: any, name: string): ProbeCommand {
   if (!isPlainObject(command)) {
-    throw new Error(`Command "${name}" must be a plain object; got ${typeof(command)}`);
+    throw new ProbeOptionError(`Command "${name}" must be a plain object; got ${typeof(command)}`);
   } else if (command.type === 'function') {
     return validateFunctionCommand(command, name);
   } else if (command.type === 'system') {
     return validateSystemCommand(command, name);
   } else {
-    throw new Error(`Command "${name}" must have a "type" property with the value "function" or "system"; got ${JSON.stringify(command.type)}`);
+    throw new ProbeOptionError(`Command "${name}" must have a "type" property with the value "function" or "system"; got ${JSON.stringify(command.type)}`);
   }
 }
 
 export function validateFunctionCommand(command: any, name: string): FunctionCommand {
   if (typeof command.command !== 'function') {
-    throw new Error(`Command "${name}" must have a "command" property that is a function; got ${typeof command.command}`);
+    throw new ProbeOptionError(`Command "${name}" must have a "command" property that is a function; got ${typeof command.command}`);
   }
 
   return command;
@@ -181,13 +184,13 @@ export function validateFunctionCommand(command: any, name: string): FunctionCom
 
 export function validateSystemCommand(command: any, name: string): SystemCommand {
   if (typeof command.command !== 'string') {
-    throw new Error(`Command "${name}" must have a "command" property that is a string; got ${typeof command.command}`);
+    throw new ProbeOptionError(`Command "${name}" must have a "command" property that is a string; got ${typeof command.command}`);
   } else if (command.args !== undefined && !isArray(command.args)) {
-    throw new Error(`The "args" property of command "${name}" must be an array; got ${typeof command.args}`);
+    throw new ProbeOptionError(`The "args" property of command "${name}" must be an array; got ${typeof command.args}`);
   } else if (isArray(command.args) && command.args.some((arg: any) => typeof arg !== 'string')) {
-    throw new Error(`The "args" array of command "${name}" must contain only strings`);
+    throw new ProbeOptionError(`The "args" array of command "${name}" must contain only strings`);
   } else if (command.cwd !== undefined && typeof command.cwd !== 'string') {
-    throw new Error(`The "cwd" property of command "${name}" must be a string; got ${typeof command.cwd}`);
+    throw new ProbeOptionError(`The "cwd" property of command "${name}" must be a string; got ${typeof command.cwd}`);
   }
 
   return command;
@@ -204,7 +207,7 @@ export function validateBooleanOption<O, K extends keyof O>(options: O, name: K)
   } else if (isTrueString(value)) {
     return true;
   } else {
-    throw new Error(`"${name}" option must be a boolean or a boolean-like string (1/0, y/n, yes/no, t/f or true/false); got ${typeof value}`);
+    throw new ProbeOptionError(`"${name}" option must be a boolean or a boolean-like string (1/0, y/n, yes/no, t/f or true/false); got ${typeof value}`);
   }
 }
 
@@ -214,32 +217,44 @@ export function validateNumericOption<O, K extends keyof O>(options: O, name: K,
   if (value === undefined) {
     return;
   } else if (typeof value !== 'number' && typeof value !== 'string') {
-    throw new Error(`"${name}" option must be a number or a numeric string; got ${typeof value}`);
+    throw new ProbeOptionError(`"${name}" option must be a number or a numeric string; got ${typeof value}`);
   }
 
   const n = Number(value);
   if (!isFinite(n)) {
-    throw new Error(`"${name}" option must be a number or a numeric string; got ${value} (type ${typeof value})`);
+    throw new ProbeOptionError(`"${name}" option must be a number or a numeric string; got ${value} (type ${typeof value})`);
   } else if (integer && !isInteger(n)) {
-    throw new Error(`"${name}" option must be an integer; got ${value}`);
+    throw new ProbeOptionError(`"${name}" option must be an integer; got ${value}`);
   } else if (min !== undefined && n < min) {
-    throw new Error(`"${name}" option must be greater than or equal to ${min}; got ${value}`);
+    throw new ProbeOptionError(`"${name}" option must be greater than or equal to ${min}; got ${value}`);
   } else if (max !== undefined && n > max) {
-    throw new Error(`"${name}" option must be smaller than or equal to ${max}; got ${value}`);
+    throw new ProbeOptionError(`"${name}" option must be smaller than or equal to ${max}; got ${value}`);
   }
 
   return n;
 }
 
-export function validateStringArrayOption<O, K extends keyof O>(options: O, name: K): string[] | undefined {
-  return validateArrayOption(options, name, 'strings', v => typeof v === 'string');
+export function validateRegExpArrayOption<O extends Record<string, any>, K extends keyof O>(options: O, name: K): string[] | undefined {
+  return validateArrayOption(options, name, 'regular expressions', v => {
+    try {
+      return new RegExp(v) !== undefined;
+    } catch (_) {
+      throw new ProbeOptionError(`Value ${JSON.stringify(v)} of option "${name}" is not a valid regular expression`);
+    }
+  });
+}
+
+export function validateStringArrayOption<O extends Record<string, any>, K extends keyof O>(options: O, name: K): string[] | undefined {
+  return validateArrayOption(options, name, 'strings', isString);
 }
 
 export function validateStringOption<O, K extends keyof O>(options: O, name: K): string | undefined {
 
   const value = options[name];
-  if (value !== undefined && typeof value !== 'string') {
-    throw new Error(`"${name}" option must be a string; got ${typeof value}`);
+  if (value === undefined) {
+    return;
+  } else if (typeof value !== 'string') {
+    throw new ProbeOptionError(`"${name}" option must be a string; got ${typeof value}`);
   }
 
   return value;

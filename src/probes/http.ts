@@ -1,16 +1,17 @@
 import { ClientRequest, IncomingMessage, request as requestHttp, RequestOptions } from 'http';
 import { request as requestHttps } from 'https';
 import { Context } from 'koa';
-import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, last, merge, pick } from 'lodash';
+import { assign, each, isArray, isFinite, isInteger, isNaN, isPlainObject, isString, last, merge, pick } from 'lodash';
 import * as moment from 'moment';
 import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
 import * as urlJoin from 'url-join';
 
 import { Config } from '../config';
+import { ProbeOptionError } from '../errors';
 import { buildMetric, Metric } from '../metrics';
 import { getPresetOptions } from '../presets';
-import { Failure, HttpParams, increase, isFalseString, isTrueString, parseHttpParams, ProbeResult, Raw, toArray, validateArrayOption, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
+import { Failure, HttpParams, increase, isFalseString, isTrueString, parseHttpParams, ProbeResult, Raw, toArray, validateArrayOption, validateBooleanOption, validateRegExpArrayOption, validateStringOption } from '../utils';
 
 const httpStatusCodeRangeRegExp = /^([1-5])xx$/i;
 
@@ -122,9 +123,8 @@ export function validateHttpProbeOptions(options: Raw<HttpProbeOptions>): HttpPr
     allowUnauthorized: validateBooleanOption(options, 'allowUnauthorized'),
     expectHttpRedirects: validateExpectHttpRedirectsOption(options),
     expectHttpRedirectTo: validateStringOption(options, 'expectHttpRedirectTo'),
-    // TODO: parse as RegExps
-    expectHttpResponseBodyMatch: validateStringArrayOption(options, 'expectHttpResponseBodyMatch'),
-    expectHttpResponseBodyMismatch: validateStringArrayOption(options, 'expectHttpResponseBodyMismatch'),
+    expectHttpResponseBodyMatch: validateRegExpArrayOption(options, 'expectHttpResponseBodyMatch'),
+    expectHttpResponseBodyMismatch: validateRegExpArrayOption(options, 'expectHttpResponseBodyMismatch'),
     expectHttpSecure: validateBooleanOption(options, 'expectHttpSecure'),
     // TODO: parse this correctly
     expectHttpStatusCode: validateExpectHttpStatusCodeOption(options),
@@ -299,7 +299,7 @@ function validateExpectHttpRedirectsOption(options: Raw<HttpProbeOptions>): Expe
   } else if (typeof value === 'boolean') {
     return value;
   } else if (typeof value !== 'number' && typeof value !== 'string') {
-    throw new Error(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${typeof value}`);
+    throw new ProbeOptionError(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${typeof value}`);
   } else if (isFalseString(value)) {
     return false;
   } else if (isTrueString(value)) {
@@ -308,7 +308,7 @@ function validateExpectHttpRedirectsOption(options: Raw<HttpProbeOptions>): Expe
 
   const n = Number(value);
   if (!isInteger(n) || n < 0) {
-    throw new Error(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${value}`);
+    throw new ProbeOptionError(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${value}`);
   }
 
   return n;
@@ -321,16 +321,16 @@ function validateExpectHttpStatusCodeOption(options: Raw<HttpProbeOptions>): Exp
     return;
   }
 
-  validateArrayOption(options, 'expectHttpStatusCode', 'integers or strings', v => isInteger(v) || typeof v === 'string');
+  validateArrayOption(options, 'expectHttpStatusCode', 'integers or strings', v => isInteger(v) || isString(v));
 
   const result: ExpectHttpStatusCode = [];
   for (const code of options.expectHttpStatusCode) {
 
     const n = Number(code);
     if (isInteger(n) && n < 0) {
-      throw new Error(`"expectHttpStatusCode" option must not contain negative numbers; got ${code}`);
+      throw new ProbeOptionError(`"expectHttpStatusCode" option must not contain negative numbers; got ${code}`);
     } else if (!isInteger(n) && !code.match(httpStatusCodeRangeRegExp)) {
-      throw new Error(`"expectHttpStatusCode" option must contain only strings that are HTTP status code ranges (e.g. 2xx); got ${code}`);
+      throw new ProbeOptionError(`"expectHttpStatusCode" option must contain only strings that are HTTP status code ranges (e.g. 2xx); got ${code}`);
     }
 
     result.push(isInteger(n) ? n : code);
@@ -345,16 +345,16 @@ function validateHeadersOption(options: HttpProbeOptions): HttpParams | undefine
   if (value === undefined) {
     return;
   } else if (!isPlainObject(value)) {
-    throw new Error(`"headers" option must be a plain object; got ${typeof value}`);
+    throw new ProbeOptionError(`"headers" option must be a plain object; got ${typeof value}`);
   }
 
   each(value, (values, key) => {
     if (typeof key !== 'string') {
-      throw new Error(`"headers" option must have only strings as keys; got ${typeof key}`);
+      throw new ProbeOptionError(`"headers" option must have only strings as keys; got ${typeof key}`);
     } else if (!isArray(values)) {
-      throw new Error(`"headers" option must be a map of string arrays; key "${key}" has type ${typeof values}`);
+      throw new ProbeOptionError(`"headers" option must be a map of string arrays; key "${key}" has type ${typeof values}`);
     } else if (values.some(v => typeof v !== 'string')) {
-      throw new Error(`"headers" option must be a map of string arrays; key "${key}" has values that are not strings`);
+      throw new ProbeOptionError(`"headers" option must be a map of string arrays; key "${key}" has values that are not strings`);
     }
   });
 
