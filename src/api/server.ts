@@ -61,7 +61,7 @@ export function startServer(config: Config) {
     }
   });
 
-  app.on('error', err => logger.warn(err.stack));
+  app.on('error', err => err instanceof ProbeError && err.status === 400 ? logger.debug(err.stack) : logger.warn(err.stack));
 
   return new Promise(resolve => {
     app.listen(config.port, () => {
