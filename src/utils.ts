@@ -1,7 +1,7 @@
 import { readFile } from 'fs-extra';
 import { safeLoad as parseYaml } from 'js-yaml';
 import { has, isArray, isFinite, isInteger, isPlainObject, isString, merge, uniq } from 'lodash';
-import * as nativeRequire from 'native-require';
+import nativeRequire from 'native-require';
 import { extname, resolve as resolvePath } from 'path';
 
 import { ProbeOptionError } from './errors';
