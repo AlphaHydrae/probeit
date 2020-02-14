@@ -72,6 +72,7 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
     - [`s3SmallestObjectSize`](#s3smallestobjectsize)
   - [S3 probe parameters](#s3-probe-parameters)
     - [`s3ByPrefix`](#s3byprefix)
+    - [`s3ByPrefixOnly`](#s3byprefixonly)
     - [`s3Versions`](#s3versions)
 - [Versioning policy](#versioning-policy)
 
@@ -1090,6 +1091,17 @@ objects can be differentiated by their `tags` property:
   "type": "bytes",
   "value": 2507812
 }
+```
+
+#### `s3ByPrefixOnly`
+
+When using the previous `s3ByPrefix` option, all S3 objects are analyzed by
+default, including those that do not match the provided prefix or prefixes.
+Enabling this option limits the analysis to only those objects that match the
+prefixes.
+
+```
+?s3ByPrefixOnly=true
 ```
 
 #### `s3Versions`

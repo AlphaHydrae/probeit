@@ -52,6 +52,7 @@ export async function load(options: Partial<Config> = {}): Promise<Config> {
     s3AccessKeyId: getEnv('PROBE_S3_ACCESS_KEY_ID'),
     s3SecretAccessKey: getEnv('PROBE_S3_SECRET_ACCESS_KEY'),
     s3ByPrefix: compactResolved(getEnv('PROBE_S3_BY_PREFIX')),
+    s3ByPrefixOnly: getEnv('PROBE_S3_BY_PREFIX_ONLY'),
     s3Versions: getEnv('PROBE_S3_VERSIONS')
   };
 
@@ -151,6 +152,6 @@ function whitelistConfig<T extends object = any>(config: T): Partial<Config> {
     'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
     'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion',
     // S3 probe parameters
-    's3AccessKeyId', 's3SecretAccessKey', 's3ByPrefix', 's3Versions'
+    's3AccessKeyId', 's3SecretAccessKey', 's3ByPrefix', 's3ByPrefixOnly', 's3Versions'
   );
 }

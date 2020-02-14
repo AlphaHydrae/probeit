@@ -2,7 +2,7 @@ import aws from 'aws-sdk';
 import { Context } from 'koa';
 import { assign, last, merge, pick } from 'lodash';
 import moment from 'moment';
-import { parse as parseUrl } from 'url';
+import { parse as parseUrl, UrlWithStringQuery } from 'url';
 
 import { Config, GeneralOptions } from '../config';
 import { buildMetric, Metric } from '../metrics';
@@ -11,13 +11,14 @@ import { ProbeResult, promisified, Raw, toArray, validateBooleanOption, validate
 
 const optionNames = [
   's3AccessKeyId', 's3SecretAccessKey',
-  's3ByPrefix', 's3Versions'
+  's3ByPrefix', 's3ByPrefixOnly', 's3Versions'
 ];
 
 export interface S3ProbeOptions {
   s3AccessKeyId?: string;
   s3SecretAccessKey?: string;
   s3ByPrefix?: string[];
+  s3ByPrefixOnly?: boolean;
   s3Versions?: boolean;
 }
 
@@ -42,6 +43,7 @@ export async function getS3ProbeOptions(target: string, config: Config, ctx?: Co
       s3AccessKeyId: last(toArray(ctx.query.s3AccessKeyId)),
       s3SecretAccessKey: last(toArray(ctx.query.s3SecretAccessKey)),
       s3ByPrefix: toArray(ctx.query.s3ByPrefix),
+      s3ByPrefixOnly: last(toArray(ctx.query.s3ByPrefixOnly)),
       s3Versions: last(toArray(ctx.query.s3Versions))
     });
   }
@@ -77,27 +79,13 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
 
   const s3Url = parseUrl(target);
 
-  const bucket = s3Url.host;
-  const prefix = s3Url.pathname;
-  if (!bucket) {
-    throw new Error('S3 bucket name is required');
-  }
-
-  const s3 = new aws.S3({
-    accessKeyId: options.s3AccessKeyId,
-    secretAccessKey: options.s3SecretAccessKey
-  });
-
   const result = {
     failures: [],
     metrics: [],
     success: false
   };
 
-  const objectsPromise = listAllObjects(s3, { Bucket: bucket, Prefix: prefix || undefined });
-  const versionsPromise = options.s3Versions ? listAllObjectVersions(s3, { Bucket: bucket, Prefix: prefix || undefined }) : Promise.resolve([]);
-
-  const [ objects, versions ] = await Promise.all([ objectsPromise, versionsPromise ]);
+  const [ objects, versions ] = await listObjectsAndVersions(s3Url, options);
 
   const aggregationPrefixes = options.s3ByPrefix || [];
   const globalTags: { [key: string]: string } = {};
@@ -125,6 +113,7 @@ export function validateS3ProbeOptions(options: Raw<S3ProbeOptions>): S3ProbeOpt
     s3AccessKeyId: validateStringOption(options, 's3AccessKeyId'),
     s3SecretAccessKey: validateStringOption(options, 's3SecretAccessKey'),
     s3ByPrefix: validateStringArrayOption(options, 's3ByPrefix'),
+    s3ByPrefixOnly: validateBooleanOption(options, 's3ByPrefixOnly'),
     s3Versions: validateBooleanOption(options, 's3Versions')
   };
 }
@@ -221,28 +210,57 @@ function getS3ProbeDefaultOptions(options: GeneralOptions): S3ProbeOptions {
   };
 }
 
-async function listAllObjects(s3: aws.S3, options: aws.S3.ListObjectsV2Request, objects: any[] = []): Promise<any[]> {
+function getS3Prefixes(targetUrl: UrlWithStringQuery, options: S3ProbeOptions) {
+  const basePrefix = targetUrl.pathname ? targetUrl.pathname.replace(/^\//, '') : undefined;
+  return options.s3ByPrefix && options.s3ByPrefixOnly ? options.s3ByPrefix.map(prefix => `${basePrefix || ''}${prefix}`) : [ basePrefix ];
+}
+
+async function listObjectsAndVersions(targetUrl: UrlWithStringQuery, options: S3ProbeOptions) {
+
+  const bucket = targetUrl.host;
+  if (!bucket) {
+    throw new Error('S3 bucket name is required');
+  }
+
+  const s3 = new aws.S3({
+    accessKeyId: options.s3AccessKeyId,
+    secretAccessKey: options.s3SecretAccessKey
+  });
+
+  const prefixes = getS3Prefixes(targetUrl, options);
+  const objectsPromise = listByPrefixesRecursively(s3, { Bucket: bucket }, prefixes, listObjectsRecursively);
+  const versionsPromise = options.s3Versions ? listByPrefixesRecursively(s3, { Bucket: bucket }, prefixes, listObjectVersionsRecursively) : Promise.resolve([]);
+
+  return Promise.all([ objectsPromise, versionsPromise ]);
+}
+
+async function listByPrefixesRecursively<O extends { Prefix?: string }>(s3: aws.S3, options: O, prefixes: Array<string | undefined>, func: (s3: aws.S3, options: O) => Promise<any[]>) {
+  const results = await Promise.all(prefixes.map(prefix => func(s3, { ...options, Prefix: prefix })));
+  return results.reduce((memo, r) => memo.concat(r));
+}
+
+async function listObjectsRecursively(s3: aws.S3, options: aws.S3.ListObjectsV2Request, objects: any[] = []): Promise<any[]> {
 
   const res = await promisified<aws.S3.ListObjectsV2Output>(s3.listObjectsV2.bind(s3), options);
   if (res.Contents) {
     objects.push(...res.Contents);
 
     if (res.IsTruncated && res.StartAfter) {
-      return listAllObjects(s3, { ...options, StartAfter: res.StartAfter }, objects);
+      return listObjectsRecursively(s3, { ...options, StartAfter: res.StartAfter }, objects);
     }
   }
 
   return objects;
 }
 
-async function listAllObjectVersions(s3: aws.S3, options: aws.S3.ListObjectVersionsRequest, versions: any[] = []): Promise<any[]> {
+async function listObjectVersionsRecursively(s3: aws.S3, options: aws.S3.ListObjectVersionsRequest, versions: any[] = []): Promise<any[]> {
 
   const res = await promisified<aws.S3.ListObjectVersionsOutput>(s3.listObjectVersions.bind(s3), options);
   if (res.Versions) {
     versions.push(...res.Versions);
 
     if (res.IsTruncated && res.NextKeyMarker && res.NextVersionIdMarker) {
-      return listAllObjectVersions(s3, { ...options, KeyMarker: res.NextKeyMarker, VersionIdMarker: res.NextVersionIdMarker }, versions);
+      return listObjectVersionsRecursively(s3, { ...options, KeyMarker: res.NextKeyMarker, VersionIdMarker: res.NextVersionIdMarker }, versions);
     }
   }
 
