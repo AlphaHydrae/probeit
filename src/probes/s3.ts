@@ -77,9 +77,9 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
 
   const s3Url = parseUrl(target);
 
-  const Bucket = s3Url.host;
-  const Prefix = s3Url.pathname;
-  if (Bucket === undefined) {
+  const bucket = s3Url.host;
+  const prefix = s3Url.pathname;
+  if (!bucket) {
     throw new Error('S3 bucket name is required');
   }
 
@@ -94,8 +94,8 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
     success: false
   };
 
-  const objectsPromise = listAllObjects(s3, { Bucket, Prefix });
-  const versionsPromise = options.s3Versions ? listAllObjectVersions(s3, { Bucket, Prefix }) : Promise.resolve([]);
+  const objectsPromise = listAllObjects(s3, { Bucket: bucket, Prefix: prefix || undefined });
+  const versionsPromise = options.s3Versions ? listAllObjectVersions(s3, { Bucket: bucket, Prefix: prefix || undefined }) : Promise.resolve([]);
 
   const [ objects, versions ] = await Promise.all([ objectsPromise, versionsPromise ]);
 
@@ -105,10 +105,10 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
   if (aggregationPrefixes.length) {
     globalTags.prefix = '';
 
-    for (const prefix of aggregationPrefixes) {
-      const tags = { prefix };
-      const matchingObjects = objects.filter((o: any) => o.Key.indexOf(prefix) === 0);
-      const matchingVersions = options.s3Versions ? versions.filter((v: any) => v.Key.indexOf(prefix) === 0) : undefined;
+    for (const aggregationPrefix of aggregationPrefixes) {
+      const tags = { prefix: aggregationPrefix };
+      const matchingObjects = objects.filter((o: any) => o.Key.indexOf(aggregationPrefix) === 0);
+      const matchingVersions = options.s3Versions ? versions.filter((v: any) => v.Key.indexOf(aggregationPrefix) === 0) : undefined;
       addS3Metrics(result.metrics, tags, matchingObjects, matchingVersions);
     }
   }
