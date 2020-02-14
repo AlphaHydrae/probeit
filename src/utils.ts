@@ -65,20 +65,20 @@ export function increase(counters: { [key: string]: number | undefined }, key: s
 }
 
 export function isFalseString(value: any): boolean {
-  return typeof value === 'string' && !!value.match(/^(0|n|no|f|false)$/i);
+  return typeof value === 'string' && !!(/^(0|n|no|f|false)$/i).exec(value);
 }
 
 export function isTrueString(value: any): boolean {
-  return typeof value === 'string' && !!value.match(/^(1|y|yes|t|true)$/i);
+  return typeof value === 'string' && !!(/^(1|y|yes|t|true)$/i).exec(value);
 }
 
 export async function loadConfig(file: string) {
-  if (file.match(/\.js$/)) {
+  if (/\.js$/.exec(file)) {
     const config = nativeRequire(resolvePath(file));
     return typeof config === 'function' ? config() : config;
-  } else if (file.match(/\.json$/)) {
+  } else if (/\.json$/.exec(file)) {
     return JSON.parse(await readFile(file, 'utf8'));
-  } else if (file.match(/\.ya?ml$/)) {
+  } else if (/\.ya?ml$/.exec(file)) {
     return parseYaml(await readFile(file, 'utf8'));
   } else {
     throw new Error(`Unknown config file extension "${extname(file)}"; must be ".json" or ".yml"`);
@@ -95,7 +95,7 @@ export function parseBooleanParam(value: boolean | string | undefined, defaultVa
     return defaultValue;
   }
 
-  return typeof value === 'boolean' ? value : !!String(value).match(/^1|y|yes|t|true$/i);
+  return typeof value === 'boolean' ? value : !!(/^1|y|yes|t|true$/i).exec(String(value));
 }
 
 export function parseHttpParams(value: string | string[] | undefined): HttpParams {
