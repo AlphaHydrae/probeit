@@ -131,10 +131,26 @@ function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, object
   ));
 
   metrics.push(buildMetric(
+    's3FirstObjectSize',
+    'bytes',
+    objectsSortedByDate.length ? objectsSortedByDate[0].Size : null,
+    'The size of the earliest modified object in bytes',
+    tags
+  ));
+
+  metrics.push(buildMetric(
     's3LastObjectModificationDate',
     'datetime',
     objectsSortedByDate.length ? moment(last(objectsSortedByDate).LastModified).format() : null,
     'The modification date of the most recently modified object',
+    tags
+  ));
+
+  metrics.push(buildMetric(
+    's3LastObjectSize',
+    'bytes',
+    objectsSortedByDate.length ? last(objectsSortedByDate).Size : null,
+    'The size of the most recently modified object in bytes',
     tags
   ));
 
@@ -187,10 +203,26 @@ function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, object
   ));
 
   metrics.push(buildMetric(
+    's3FirstObjectVersionSize',
+    'bytes',
+    versionsSortedByDate.length ? versionsSortedByDate[0].Size : null,
+    'The size of the earliest modified object version in bytes',
+    tags
+  ));
+
+  metrics.push(buildMetric(
     's3LastObjectVersionModificationDate',
     'datetime',
     versionsSortedByDate.length ? moment(last(versionsSortedByDate).LastModified).format() : null,
     'The modification date of the most recently modified object version',
+    tags
+  ));
+
+  metrics.push(buildMetric(
+    's3LastObjectVersionSize',
+    'bytes',
+    versionsSortedByDate.length ? last(versionsSortedByDate).Size : null,
+    'The size of the most recently modified object version in bytes',
     tags
   ));
 

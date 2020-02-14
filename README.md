@@ -62,10 +62,14 @@ Exporter](https://github.com/prometheus/blackbox_exporter).
 - [S3 probe](#s3-probe)
   - [S3 probe metrics](#s3-probe-metrics)
     - [`s3FirstObjectModificationDate`](#s3firstobjectmodificationdate)
+    - [`s3FirstObjectSize`](#s3firstobjectsize)
     - [`s3FirstObjectVersionModificationDate`](#s3firstobjectversionmodificationdate)
+    - [`s3FirstObjectVersionSize`](#s3firstobjectversionsize)
     - [`s3LargestObjectSize`](#s3largestobjectsize)
     - [`s3LastObjectModificationDate`](#s3lastobjectmodificationdate)
+    - [`s3LastObjectSize`](#s3lastobjectsize)
     - [`s3LastObjectVersionModificationDate`](#s3lastobjectversionmodificationdate)
+    - [`s3LastObjectVersionSize`](#s3lastobjectversionsize)
     - [`s3ObjectsCount`](#s3objectscount)
     - [`s3ObjectsTotalSize`](#s3objectstotalsize)
     - [`s3ObjectVersionsCount`](#s3objectversionscount)
@@ -900,6 +904,22 @@ The modification date of the earliest modified object.
 }
 ```
 
+#### `s3FirstObjectSize`
+
+**Type:** bytes
+
+The size of the earliest modified object in bytes.
+
+```json
+{
+  "description": "...",
+  "name": "s3FirstObjectSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 1850912
+}
+```
+
 #### `s3FirstObjectVersionModificationDate`
 
 **Type:** datetime
@@ -916,6 +936,25 @@ set to `true`.
   "tags": {},
   "type": "datetime",
   "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3FirstObjectVersionSize`
+
+**Type:** bytes
+
+The size of the earliest modified object version in bytes.
+
+**Note:** this metric will only be provided if the [`s3Versions` parameter] is
+set to `true`.
+
+```json
+{
+  "description": "...",
+  "name": "s3FirstObjectVersionSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 1850912
 }
 ```
 
@@ -951,6 +990,22 @@ The modification date of the most recently modified object.
 }
 ```
 
+#### `s3LastObjectSize`
+
+**Type:** bytes
+
+The size of the most recently modified object in bytes.
+
+```json
+{
+  "description": "...",
+  "name": "s3LastObjectSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 1850912
+}
+```
+
 #### `s3LastObjectVersionModificationDate`
 
 **Type:** datetime
@@ -967,6 +1022,25 @@ set to `true`.
   "tags": {},
   "type": "datetime",
   "value": "2018-05-01T00:00:00Z"
+}
+```
+
+#### `s3LastObjectVersionSize`
+
+**Type:** bytes
+
+The size of the most recently modified object version in bytes.
+
+**Note:** this metric will only be provided if the [`s3Versions` parameter] is
+set to `true`.
+
+```json
+{
+  "description": "...",
+  "name": "s3LastObjectVersionSize",
+  "tags": {},
+  "type": "bytes",
+  "value": 1850912
 }
 ```
 
