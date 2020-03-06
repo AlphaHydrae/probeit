@@ -30,7 +30,7 @@ module.exports = {
     "@typescript-eslint/explicit-member-accessibility": [
       "error",
       {
-        "accessibility": "explicit"
+        "accessibility": "no-public"
       }
     ],
     "@typescript-eslint/explicit-function-return-type": "off",
@@ -80,6 +80,10 @@ module.exports = {
     "@typescript-eslint/no-unnecessary-qualifier": "error",
     "@typescript-eslint/no-unnecessary-type-arguments": "error",
     "@typescript-eslint/no-unnecessary-type-assertion": "error",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_" }
+    ],
     "@typescript-eslint/no-use-before-define": "off",
     "@typescript-eslint/no-var-requires": "error",
     "@typescript-eslint/prefer-for-of": "error",
@@ -126,11 +130,9 @@ module.exports = {
     "id-blacklist": [
       "error",
       "any",
-      "number",
       "String",
       "string",
       "Boolean",
-      "boolean",
       "Undefined"
     ],
     "id-match": "error",

@@ -28,7 +28,7 @@ export async function getS3ProbeOptions(target: string, config: Config, ctx?: Co
 
   const targetOptions = {
     s3AccessKeyId: s3Url.auth ? s3Url.auth.replace(/:.*/, '') : undefined,
-    s3SecretAccessKey: s3Url.auth && s3Url.auth.match(/:.+/) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
+    s3SecretAccessKey: s3Url.auth && /:.+/.exec(s3Url.auth) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
   };
 
   const queryDefaults = {};

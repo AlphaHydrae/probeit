@@ -22,7 +22,7 @@ export function validateLogLevelOption(options: LoggerOptions): LogLevel {
 
   const logLevel = options.logLevel;
   if (logLevel !== undefined && !includes(LOG_LEVELS, logLevel.toLowerCase())) {
-    throw new Error(`"logLevel" option must be one of the following values: ${LOG_LEVELS.map(level => `"${logLevel}"`).join(', ')}; got ${logLevel}`);
+    throw new Error(`"logLevel" option must be one of the following values: ${LOG_LEVELS.map(level => `"${level}"`).join(', ')}; got ${logLevel}`);
   }
 
   return logLevel as LogLevel;

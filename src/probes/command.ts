@@ -7,7 +7,7 @@ import { Failure, ProbeResult } from '../utils';
 
 export interface FunctionCommand {
   type: 'function';
-  command(): ProbeResult;
+  command(): ProbeResult | Promise<ProbeResult>;
 }
 
 export interface SystemCommand {
@@ -29,7 +29,7 @@ export interface CommandProbeOptions {
   command: ProbeCommand;
 }
 
-export async function getCommandProbeOptions(target: string, config: Config, ctx?: Context): Promise<CommandProbeOptions> {
+export function getCommandProbeOptions(target: string, config: Config, _ctx?: Context): CommandProbeOptions {
 
   const commandName = target.replace(/^command:/, '');
   if (!config.commands || !config.commands[commandName]) {

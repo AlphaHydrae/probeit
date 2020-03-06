@@ -59,7 +59,7 @@ export function buildMetric(name: string, type: 'bytes' | 'number' | 'quantity' 
 export function buildMetric(name: string, type: MetricType, value: boolean | number | string | null, description: string, tags: { [key: string]: string } = {}): any {
   if (typeof name !== 'string') {
     throw new Error(`Metric name must be a string, got ${typeof name}`);
-  } else if (!name.match(/^[a-z0-9]+(?:[A-Z0-9][a-z0-9]+)*$/)) {
+  } else if (!/^[a-z0-9]+(?:[A-Z0-9][a-z0-9]+)*$/.exec(name)) {
     throw new Error(`Metric name "${name}" is not in camel-case`);
   } else if (!METRIC_TYPES[type]) {
     throw new Error(`Unknown metric type "${type}"; must be one of the following: ${Object.keys(METRIC_TYPES).map(t => `"${t}"`).join(', ')}`);
@@ -67,15 +67,15 @@ export function buildMetric(name: string, type: MetricType, value: boolean | num
     throw new Error(`Invalid metric value ${JSON.stringify(value)} for type "${type}": must be ${METRIC_TYPES[type].description}`);
   } else if (typeof description !== 'string') {
     throw new Error(`Metric description must be a string, got ${typeof description}`);
-  } else if (description.match(/^\s*$/)) {
+  } else if (/^\s*$/.exec(description)) {
     throw new Error('Metric description cannot be blank');
   } else if (!isPlainObject(tags)) {
     throw new Error(`Metric tags must be a plain object, got ${typeof tags}`);
-  } else if (Object.keys(tags).some(key => !key.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/))) {
+  } else if (Object.keys(tags).some(key => !/^[a-zA-Z_][a-zA-Z0-9_]*$/.exec(key))) {
     throw new Error(`Metric tag keys must contain only letters, digits and underscores, and cannot start with a digit (${Object.keys(tags).sort().join(', ')})`);
   } else if (objectValues(tags).some(tag => typeof tag !== 'boolean' && typeof tag !== 'number' && typeof tag !== 'string')) {
     throw new Error(`Metric tag values must be booleans, numbers or string (${JSON.stringify(tags)})`);
-  } else if (objectValues(tags).some(tag => !!String(tag).match(/"/))) {
+  } else if (objectValues(tags).some(tag => !!/"/.exec(String(tag)))) {
     throw new Error(`Metric tag values must not contain double quotes (${JSON.stringify(tags)})`);
   }
 

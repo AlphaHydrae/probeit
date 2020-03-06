@@ -153,7 +153,7 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
 
     state.requests.push(reqOptions);
 
-    const req = (target.match(/^https:/i) ? requestHttps : requestHttp)(reqOptions, res => {
+    const req = (/^https:/i.exec(target) ? requestHttps : requestHttp)(reqOptions, res => {
 
       let body = '';
 
@@ -181,9 +181,9 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
           increase(state.counters, 'redirects', 1);
 
           let location = res.headers.location;
-          if (location.match(/^\/\/?[^/]/)) {
+          if (/^\/\/?[^/]/.exec(location)) {
             location = urlJoin(target.replace(/^(https?:\/\/[^/]+).*$/, '$1'), location);
-          } else if (!location.match(/^(https?:\/\/|\/\/)/)) {
+          } else if (!/^(https?:\/\/|\/\/)/.exec(location)) {
             location = urlJoin(target, location);
           }
 
@@ -211,7 +211,7 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
       });
     });
 
-    req.on('error', err => {
+    req.on('error', () => {
       resolve({ req, state });
     });
 
@@ -413,7 +413,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
 
   if (options.expectHttpResponseBodyMatch) {
     for (const expectedMatch of options.expectHttpResponseBodyMatch) {
-      if (body.match(new RegExp(expectedMatch))) {
+      if (new RegExp(expectedMatch).exec(body)) {
         continue;
       }
 
@@ -428,7 +428,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
   if (options.expectHttpResponseBodyMismatch) {
     for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
 
-      const match = body.match(new RegExp(expectedMismatch));
+      const match = new RegExp(expectedMismatch).exec(body);
       if (!match) {
         continue;
       }
@@ -473,7 +473,7 @@ function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], optio
       continue;
     }
 
-    const rangeMatch = code.match(httpStatusCodeRangeRegExp);
+    const rangeMatch = httpStatusCodeRangeRegExp.exec(code);
     if (rangeMatch) {
       const rangeStart = parseInt(rangeMatch[1], 10) * 100;
       if (actual && actual >= rangeStart && actual <= rangeStart + 99) {
