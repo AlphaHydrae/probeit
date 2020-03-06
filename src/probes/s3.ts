@@ -87,7 +87,7 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
 
   const [ objects, versions ] = await listObjectsAndVersions(s3Url, options);
 
-  const aggregationPrefixes = options.s3ByPrefix || [];
+  const aggregationPrefixes = options.s3ByPrefix ?? [];
   const globalTags: { [key: string]: string } = {};
 
   if (aggregationPrefixes.length) {
@@ -244,7 +244,7 @@ function getS3ProbeDefaultOptions(options: GeneralOptions): S3ProbeOptions {
 
 function getS3Prefixes(targetUrl: UrlWithStringQuery, options: S3ProbeOptions) {
   const basePrefix = targetUrl.pathname ? targetUrl.pathname.replace(/^\//, '') : undefined;
-  return options.s3ByPrefix && options.s3ByPrefixOnly ? options.s3ByPrefix.map(prefix => `${basePrefix || ''}${prefix}`) : [ basePrefix ];
+  return options.s3ByPrefix && options.s3ByPrefixOnly ? options.s3ByPrefix.map(prefix => `${basePrefix ?? ''}${prefix}`) : [ basePrefix ];
 }
 
 async function listObjectsAndVersions(targetUrl: UrlWithStringQuery, options: S3ProbeOptions) {

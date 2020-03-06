@@ -94,7 +94,7 @@ export async function getHttpProbeOptions(target: string, config: Config, ctx?: 
 
   const defaultOptions = {
     allowUnauthorized: false,
-    expectHttpRedirects: ctx && ctx.query.expectHttpRedirectTo ? true : undefined,
+    expectHttpRedirects: ctx?.query.expectHttpRedirectTo ? true : undefined,
     expectHttpResponseBodyMatch: [],
     expectHttpResponseBodyMismatch: [],
     expectHttpStatusCode: [],
@@ -245,7 +245,7 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
   metrics.push(buildMetric(
     'httpContentLength',
     'bytes',
-    res && res.headers['content-length'] ? parseInt(res.headers['content-length'] || '', 10) : null,
+    res?.headers['content-length'] ? parseInt(res.headers['content-length'] || '', 10) : null,
     'Length of the HTTP response entity in bytes'
   ));
 
@@ -262,7 +262,7 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
   metrics.push(buildMetric(
     'httpRedirects',
     'quantity',
-    state.counters.redirects || 0,
+    state.counters.redirects ?? 0,
     'Number of times HTTP 301 or 302 redirects were followed'
   ));
 
@@ -277,7 +277,7 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
   metrics.push(buildMetric(
     'httpStatusCode',
     'number',
-    res ? res.statusCode || null : null,
+    res ? res.statusCode ?? null : null,
     'HTTP status code of the final response'
   ));
 
@@ -461,7 +461,7 @@ function validateHttpSecurity(state: HttpProbeState, failures: Failure[], option
 function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], options: HttpProbeOptions) {
 
   const actual = res.statusCode;
-  const expected = options.expectHttpStatusCode || [];
+  const expected = options.expectHttpStatusCode ?? [];
   if (!expected.length) {
     expected.push('2xx', '3xx');
   }

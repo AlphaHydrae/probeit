@@ -9,11 +9,11 @@ import { Metric } from './metrics';
 import { FunctionCommand, ProbeCommand, SystemCommand } from './probes/command';
 
 export interface Failure {
+  [key: string]: any;
   actual?: any;
   cause: string;
   description: string;
   expected?: any;
-  [key: string]: any;
 }
 
 export interface HttpParams {
@@ -61,7 +61,7 @@ export async function firstResolved<T = any>(...values: Array<T | Promise<T | un
 }
 
 export function increase(counters: { [key: string]: number | undefined }, key: string, by: number) {
-  counters[key] = (counters[key] || 0) + by;
+  counters[key] = counters[key] ?? 0 + by;
 }
 
 export function isFalseString(value: any): boolean {
@@ -154,7 +154,7 @@ export function validateArrayOption<T, O extends Record<string, any>, K extends 
   if (value === undefined) {
     return;
   } else if (!isArray(value)) {
-    throw new ProbeOptionError(`"${name}" option must be an array of ${description}; got ${typeof(value)}`);
+    throw new ProbeOptionError(`"${name}" option must be an array of ${description}; got ${typeof value}`);
   } else if (!value.every(validator)) {
     throw new ProbeOptionError(`"${name}" option must be an array of ${description} but it contains other types: ${value.map((v: any) => typeof v)}`);
   }
@@ -164,7 +164,7 @@ export function validateArrayOption<T, O extends Record<string, any>, K extends 
 
 export function validateCommand(command: any, name: string): ProbeCommand {
   if (!isPlainObject(command)) {
-    throw new ProbeOptionError(`Command "${name}" must be a plain object; got ${typeof(command)}`);
+    throw new ProbeOptionError(`Command "${name}" must be a plain object; got ${typeof command}`);
   } else if (command.type === 'function') {
     return validateFunctionCommand(command, name);
   } else if (command.type === 'system') {

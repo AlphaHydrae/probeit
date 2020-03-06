@@ -13,7 +13,7 @@ export interface LoggerOptions {
 
 export function getLogger(name: string, options: LoggerOptions = {}): Logger {
   const logger = createLogger(name);
-  logger.level = options.logLevel || 'info';
+  logger.level = options.logLevel ?? 'info';
   return logger;
 }
 

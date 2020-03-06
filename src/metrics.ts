@@ -1,7 +1,7 @@
 import { isFinite, isInteger, isPlainObject, values as objectValues } from 'lodash';
 import moment from 'moment';
 
-const METRIC_TYPES = {
+const METRIC_TYPES: { [key: string]: any } = {
   boolean: {
     description: 'true or false',
     validate: (v: any) => typeof v === 'boolean'

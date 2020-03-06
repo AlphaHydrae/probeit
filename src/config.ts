@@ -56,7 +56,7 @@ export async function load(options: Partial<Config> = {}): Promise<Config> {
     s3Versions: getEnv('PROBE_S3_VERSIONS')
   };
 
-  const fromFilePromise = loadConfigFile(options.config || await fromEnvironment.config || defaultConfigFile, !options.config && !fromEnvironment.config);
+  const fromFilePromise = loadConfigFile(options.config ?? await fromEnvironment.config ?? defaultConfigFile, !options.config && !fromEnvironment.config);
 
   const fromEnvironmentKeys = Object.keys(fromEnvironment);
   const fromEnvironmentValues = fromEnvironmentKeys.map(k => fromEnvironment[k]);
@@ -130,7 +130,7 @@ function validateConfig(config: Raw<Config>): Config {
 }
 
 function validateCommands(commands: any): { [key: string]: ProbeCommand } {
-  if (!isPlainObject) {
+  if (!isPlainObject(commands)) {
     throw new Error(`The "commands" property of the configuration file must be a plain object; got ${typeof commands}`);
   }
 
