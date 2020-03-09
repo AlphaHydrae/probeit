@@ -1,9 +1,8 @@
 import { spawn, SpawnOptions } from 'child_process';
 import { Context } from 'koa';
 
-import { Config } from '../config';
 import { buildMetric, Metric } from '../metrics';
-import { Failure, ProbeResult } from '../utils';
+import { Config, Failure, ProbeResult } from '../types';
 
 export interface FunctionCommand {
   type: 'function';
@@ -31,7 +30,7 @@ export interface CommandProbeOptions {
 
 export function getCommandProbeOptions(target: string, config: Config, _ctx?: Context): CommandProbeOptions {
 
-  const commandName = target.replace(/^command:/, '');
+  const commandName = target.replace(/^command:/u, '');
   if (!config.commands || !config.commands[commandName]) {
     throw new Error(`Unknown probe command "${commandName}"`);
   }

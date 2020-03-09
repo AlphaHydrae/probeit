@@ -7,10 +7,13 @@ import { load as loadConfig } from './config';
 import { probe } from './probe';
 
 export function bin() {
-  return Promise.resolve().then(exports.run).catch(err => {
-    console.error(chalk.red(err.stack));
-    process.exit(1);
-  });
+  return Promise
+    .resolve()
+    .then(run)
+    .catch(err => {
+      console.error(chalk.red(err.stack));
+      process.exit(1);
+    });
 }
 
 export async function run() {

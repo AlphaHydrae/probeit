@@ -1,4 +1,4 @@
-import * as yargs from 'yargs';
+import yargs from 'yargs';
 
 import { Config, whitelist } from './config';
 import { parseHttpParams } from './utils';
@@ -7,6 +7,8 @@ export interface CliOptions extends Partial<Config> {
   target?: string;
 }
 
+// TODO: split this into multiple functions and re-enable eslint rule
+// eslint-disable-next-line max-lines-per-function
 export function parse(): CliOptions {
 
   const args = yargs

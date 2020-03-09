@@ -1,6 +1,6 @@
-export type ProbeErrorCode =
-  'ERR_PROBE_SERVER_INVALID_OPTION'
-;
+/* eslint-disable max-classes-per-file */
+
+export type ProbeErrorCode = 'ERR_PROBE_SERVER_INVALID_OPTION';
 
 export interface ProbeErrorOptions {
   readonly expose?: boolean;
@@ -18,8 +18,8 @@ export class ProbeError extends Error {
     super(message);
     Object.setPrototypeOf(this, new.target.prototype);
     this.properties = options.properties || {};
-    this.expose = options.expose !== undefined ? options.expose : false;
-    this.status = options.status !== undefined ? options.status : 500;
+    this.expose = options.expose ?? false;
+    this.status = options.status ?? 500;
   }
 }
 

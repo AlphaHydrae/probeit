@@ -1,11 +1,15 @@
 import { readFile } from 'fs-extra';
 import { isPlainObject, merge, pick, reduce } from 'lodash';
 
-import { LoggerOptions, LogLevel, validateLogLevelOption } from './logger';
-import { ProbeCommand } from './probes/command';
-import { HttpProbeOptions, validateHttpProbeOptions } from './probes/http';
-import { S3ProbeOptions, validateS3ProbeOptions } from './probes/s3';
-import { compactResolved, firstResolved, loadConfig, parseHttpParams, Raw, validateBooleanOption, validateCommand, validateNumericOption, validateStringOption } from './utils';
+import { validateLogLevelOption } from './logger';
+import { validateHttpProbeOptions } from './probes/http';
+import { HttpProbeOptions, S3ProbeOptions } from './probes/options';
+import { validateS3ProbeOptions } from './probes/s3';
+import { LoggerOptions, LogLevel, ProbeCommand } from './types';
+import {
+  compactResolved, firstResolved, loadConfig, parseHttpParams, Raw,
+  validateBooleanOption, validateCommand, validateNumericOption, validateStringOption
+} from './utils';
 
 const defaultConfigFile = 'config.yml';
 
@@ -56,10 +60,12 @@ export async function load(options: Partial<Config> = {}): Promise<Config> {
     s3Versions: getEnv('PROBE_S3_VERSIONS')
   };
 
-  const fromFilePromise = loadConfigFile(options.config ?? await fromEnvironment.config ?? defaultConfigFile, !options.config && !fromEnvironment.config);
+  const fromFilePromise = loadConfigFile(
+    options.config ?? await fromEnvironment.config ?? defaultConfigFile, !options.config && !fromEnvironment.config
+  );
 
   const fromEnvironmentKeys = Object.keys(fromEnvironment);
-  const fromEnvironmentValues = fromEnvironmentKeys.map(k => fromEnvironment[k]);
+  const fromEnvironmentValues = fromEnvironmentKeys.map(key => fromEnvironment[key]);
 
   const resolved = await Promise.all([ fromFilePromise, ...fromEnvironmentValues ]);
   const fromFile = resolved.shift();
@@ -129,8 +135,10 @@ function validateConfig(config: Raw<Config>): Config {
   };
 }
 
-function validateCommands(commands: any): { [key: string]: ProbeCommand } {
-  if (!isPlainObject(commands)) {
+function validateCommands(commands: any): { [key: string]: ProbeCommand } | undefined {
+  if (commands === undefined) {
+    return;
+  } else if (!isPlainObject(commands)) {
     throw new Error(`The "commands" property of the configuration file must be a plain object; got ${typeof commands}`);
   }
 
@@ -141,17 +149,33 @@ function whitelistConfig<T extends object = any>(config: T): Partial<Config> {
   return pick(
     config,
     // General options
-    'awsAccessKeyId', 'awsSecretAccessKey',
-    'config', 'logLevel', 'port', 'presets', 'pretty',
+    'awsAccessKeyId',
+    'awsSecretAccessKey',
+    'config',
+    'logLevel',
+    'port',
+    'presets',
+    'pretty',
     // Commands
     'commands',
     // HTTP probe parameters
-    'allowUnauthorized', 'followRedirects', 'headers', 'method',
+    'allowUnauthorized',
+    'followRedirects',
+    'headers',
+    'method',
     // HTTP probe expectations
-    'expectHttpRedirects', 'expectHttpRedirectTo',
-    'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
-    'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion',
+    'expectHttpRedirects',
+    'expectHttpRedirectTo',
+    'expectHttpResponseBodyMatch',
+    'expectHttpResponseBodyMismatch',
+    'expectHttpSecure',
+    'expectHttpStatusCode',
+    'expectHttpVersion',
     // S3 probe parameters
-    's3AccessKeyId', 's3SecretAccessKey', 's3ByPrefix', 's3ByPrefixOnly', 's3Versions'
+    's3AccessKeyId',
+    's3SecretAccessKey',
+    's3ByPrefix',
+    's3ByPrefixOnly',
+    's3Versions'
   );
 }

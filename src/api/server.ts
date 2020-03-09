@@ -51,7 +51,7 @@ export function startServer(config: Config) {
     const result = await probe(target, config, ctx);
 
     if (ctx.path === '/metrics') {
-      ctx.body = toPrometheusMetrics(result, !!pretty);
+      ctx.body = toPrometheusMetrics(result, Boolean(pretty));
       ctx.set('Content-Type', 'text/plain; version=0.0.4');
     } else if (pretty) {
       ctx.body = JSON.stringify(result, undefined, 2);
@@ -61,7 +61,13 @@ export function startServer(config: Config) {
     }
   });
 
-  app.on('error', err => err instanceof ProbeError && err.status === 400 ? logger.debug(err.stack) : logger.warn(err.stack));
+  app.on('error', err => {
+    if (err instanceof ProbeError && err.status === 400) {
+      return logger.debug(err.stack);
+    }
+
+    logger.warn(err.stack);
+  });
 
   return new Promise(resolve => {
     app.listen(config.port, () => {

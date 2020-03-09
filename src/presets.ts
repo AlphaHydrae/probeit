@@ -1,7 +1,7 @@
 import glob from 'glob-promise';
 import { difference, isPlainObject, merge, pick, reduce } from 'lodash';
 
-import { Config } from './config';
+import { Config } from './types';
 import { loadConfig } from './utils';
 
 const LOADED_PRESETS = Symbol('loadedPresets');
@@ -18,7 +18,7 @@ export async function getPresetOptions(config: Config, selectedPresets: string[]
     throw new Error(`The following presets are not defined: ${unknownPresets.map(preset => `"${preset}"`).join(', ')}`);
   }
 
-  return reduce(pick(presets, ...selectedPresets), (memo, preset, _) => merge(memo, preset), {});
+  return reduce(pick(presets, ...selectedPresets), (memo, preset) => merge(memo, preset), {});
 }
 
 export async function load(config: Config) {
@@ -27,7 +27,7 @@ export async function load(config: Config) {
     const matchingFiles = await glob(config.presets);
     const presetObjects = await Promise.all(matchingFiles.map(loadPreset));
 
-    config[LOADED_PRESETS] = presetObjects.reduce((memo, presets, _) => merge(memo, presets), {});
+    config[LOADED_PRESETS] = presetObjects.reduce((memo, presets) => merge(memo, presets), {});
   }
 
   return config[LOADED_PRESETS];

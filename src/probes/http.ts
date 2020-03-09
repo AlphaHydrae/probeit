@@ -7,25 +7,34 @@ import { TLSSocket } from 'tls';
 import { format as formatUrl, parse as parseUrl } from 'url';
 import urlJoin from 'url-join';
 
-import { Config } from '../config';
 import { ProbeOptionError } from '../errors';
 import { buildMetric, Metric } from '../metrics';
+import { HttpParams } from '../options';
 import { getPresetOptions } from '../presets';
-import { Failure, HttpParams, increase, isFalseString, isTrueString, parseHttpParams, ProbeResult, Raw, toArray, validateArrayOption, validateBooleanOption, validateRegExpArrayOption, validateStringOption } from '../utils';
+import { Config, Failure, ProbeResult } from '../types';
+import {
+  increase, isFalseString, isTrueString, parseHttpParams, Raw, toArray,
+  validateArrayOption, validateBooleanOption, validateRegExpArrayOption, validateStringOption
+} from '../utils';
+import { ExpectHttpRedirects, ExpectHttpStatusCode, HttpProbeOptions } from './options';
 
-const httpStatusCodeRangeRegExp = /^([1-5])xx$/i;
+const httpStatusCodeRangeRegExp = /^(?<code>[1-5])xx$/iu;
 
 const optionNames = [
   // Parameters
-  'allowUnauthorized', 'followRedirects', 'headers', 'method',
+  'allowUnauthorized',
+  'followRedirects',
+  'headers',
+  'method',
   // Expectations
-  'expectHttpRedirects', 'expectHttpRedirectTo',
-  'expectHttpResponseBodyMatch', 'expectHttpResponseBodyMismatch',
-  'expectHttpSecure', 'expectHttpStatusCode', 'expectHttpVersion'
+  'expectHttpRedirects',
+  'expectHttpRedirectTo',
+  'expectHttpResponseBodyMatch',
+  'expectHttpResponseBodyMismatch',
+  'expectHttpSecure',
+  'expectHttpStatusCode',
+  'expectHttpVersion'
 ];
-
-export type ExpectHttpRedirects = boolean | number;
-export type ExpectHttpStatusCode = Array<number | string>;
 
 interface HttpProbeData {
   req: ClientRequest;
@@ -43,22 +52,6 @@ interface HttpProbeState {
     tcpConnection?: number;
   };
   requests: RequestOptions[];
-}
-
-export interface HttpProbeOptions {
-  allowUnauthorized?: boolean;
-  expectHttpRedirects?: ExpectHttpRedirects;
-  expectHttpRedirectTo?: string;
-  // TODO: use RegExp here
-  expectHttpResponseBodyMatch?: string[];
-  expectHttpResponseBodyMismatch?: string[];
-  expectHttpSecure?: boolean;
-  // TODO: parse this correctly
-  expectHttpStatusCode?: Array<number | string>;
-  expectHttpVersion?: string;
-  followRedirects?: boolean;
-  headers?: HttpParams;
-  method?: string;
 }
 
 export class Response extends IncomingMessage {
@@ -135,7 +128,11 @@ export function validateHttpProbeOptions(options: Raw<HttpProbeOptions>): HttpPr
   };
 }
 
-function performHttpProbe(target: string, options: HttpProbeOptions, state: HttpProbeState = { counters: {}, requests: [] }): Promise<HttpProbeData> {
+function performHttpProbe(
+  target: string,
+  options: HttpProbeOptions,
+  state: HttpProbeState = { counters: {}, requests: [] }
+): Promise<HttpProbeData> {
   return new Promise(resolve => {
 
     // TODO: support query parameters
@@ -153,7 +150,7 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
 
     state.requests.push(reqOptions);
 
-    const req = (/^https:/i.exec(target) ? requestHttps : requestHttp)(reqOptions, res => {
+    const req = (/^https:/iu.exec(target) ? requestHttps : requestHttp)(reqOptions, res => {
 
       let body = '';
 
@@ -180,14 +177,11 @@ function performHttpProbe(target: string, options: HttpProbeOptions, state: Http
 
           increase(state.counters, 'redirects', 1);
 
-          let location = res.headers.location;
-          if (/^\/\/?[^/]/.exec(location)) {
-            location = urlJoin(target.replace(/^(https?:\/\/[^/]+).*$/, '$1'), location);
-          } else if (!/^(https?:\/\/|\/\/)/.exec(location)) {
-            location = urlJoin(target, location);
-          }
-
-          resolve(performHttpProbe(location, options, state));
+          resolve(performHttpProbe(
+            getRedirectUrl(target, res.headers.location),
+            options,
+            state
+          ));
         } else {
           resolve({ req, state, res: Object.assign(Object.create(res), { body }) });
         }
@@ -233,7 +227,7 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
     validateHttpVersion(res, failures, options);
   }
 
-  const success = !!res && !failures.length;
+  const success = Boolean(res) && !failures.length;
 
   metrics.push(buildMetric(
     'httpCertificateExpiry',
@@ -291,6 +285,28 @@ function getHttpMetrics(req: ClientRequest, res: Response | undefined, state: Ht
   return { failures, metrics, success };
 }
 
+function getHttpStatusRangeStart(value: string) {
+
+  const rangeMatch = httpStatusCodeRangeRegExp.exec(value);
+  if (!rangeMatch || !rangeMatch.groups) {
+    return;
+  }
+
+  const code = rangeMatch.groups.code || '';
+  const rangeStartNumber = parseInt(code, 10);
+  return isNaN(rangeStartNumber) ? undefined : rangeStartNumber * 100;
+}
+
+function getRedirectUrl(target: string, location: string) {
+  if (/^\/\/?[^/]/u.exec(location)) {
+    return urlJoin(target.replace(/^(?<baseUrl>https?:\/\/[^/]+).*$/u, '$<baseUrl>'), location);
+  } else if (!/^(?:https?:\/\/|\/\/)/u.exec(location)) {
+    return urlJoin(target, location);
+  }
+
+  return location;
+}
+
 function validateExpectHttpRedirectsOption(options: Raw<HttpProbeOptions>): ExpectHttpRedirects | undefined {
 
   const value = options.expectHttpRedirects;
@@ -299,19 +315,21 @@ function validateExpectHttpRedirectsOption(options: Raw<HttpProbeOptions>): Expe
   } else if (typeof value === 'boolean') {
     return value;
   } else if (typeof value !== 'number' && typeof value !== 'string') {
-    throw new ProbeOptionError(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${typeof value}`);
+    throw new ProbeOptionError(
+      `"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${typeof value}`
+    );
   } else if (isFalseString(value)) {
     return false;
   } else if (isTrueString(value)) {
     return true;
   }
 
-  const n = Number(value);
-  if (!isInteger(n) || n < 0) {
+  const redirects = Number(value);
+  if (!isInteger(redirects) || redirects < 0) {
     throw new ProbeOptionError(`"expectHttpRedirects" option must be a boolean or an integer greater than or equal to zero; got ${value}`);
   }
 
-  return n;
+  return redirects;
 }
 
 function validateExpectHttpStatusCodeOption(options: Raw<HttpProbeOptions>): ExpectHttpStatusCode | undefined {
@@ -321,19 +339,26 @@ function validateExpectHttpStatusCodeOption(options: Raw<HttpProbeOptions>): Exp
     return;
   }
 
-  validateArrayOption(options, 'expectHttpStatusCode', 'integers or strings', v => isInteger(v) || isString(v));
+  validateArrayOption(
+    options,
+    'expectHttpStatusCode',
+    'integers or strings',
+    expectedCode => isInteger(expectedCode) || isString(expectedCode)
+  );
 
   const result: ExpectHttpStatusCode = [];
   for (const code of options.expectHttpStatusCode) {
 
-    const n = Number(code);
-    if (isInteger(n) && n < 0) {
+    const codeNumber = Number(code);
+    if (isInteger(codeNumber) && codeNumber < 0) {
       throw new ProbeOptionError(`"expectHttpStatusCode" option must not contain negative numbers; got ${code}`);
-    } else if (!isInteger(n) && !code.match(httpStatusCodeRangeRegExp)) {
-      throw new ProbeOptionError(`"expectHttpStatusCode" option must contain only strings that are HTTP status code ranges (e.g. 2xx); got ${code}`);
+    } else if (!isInteger(codeNumber) && !code.match(httpStatusCodeRangeRegExp)) {
+      throw new ProbeOptionError(
+        `"expectHttpStatusCode" option must contain only strings that are HTTP status code ranges (e.g. 2xx); got ${code}`
+      );
     }
 
-    result.push(isInteger(n) ? n : code);
+    result.push(isInteger(codeNumber) ? codeNumber : code);
   }
 
   return result;
@@ -353,7 +378,7 @@ function validateHeadersOption(options: HttpProbeOptions): HttpParams | undefine
       throw new ProbeOptionError(`"headers" option must have only strings as keys; got ${typeof key}`);
     } else if (!isArray(values)) {
       throw new ProbeOptionError(`"headers" option must be a map of string arrays; key "${key}" has type ${typeof values}`);
-    } else if (values.some(v => typeof v !== 'string')) {
+    } else if (values.some(current => typeof current !== 'string')) {
       throw new ProbeOptionError(`"headers" option must be a map of string arrays; key "${key}" has values that are not strings`);
     }
   });
@@ -395,7 +420,12 @@ function validateHttpRedirectTarget(state: HttpProbeState, failures: Failure[], 
   }
 
   const lastRequest = last(state.requests);
-  if (lastRequest && expectedRedirect.protocol === lastRequest.protocol && expectedRedirect.host === lastRequest.host && expectedRedirect.pathname === parseUrl(formatUrl(lastRequest)).pathname) {
+  if (
+    lastRequest &&
+    expectedRedirect.protocol === lastRequest.protocol &&
+    expectedRedirect.host === lastRequest.host &&
+    expectedRedirect.pathname === parseUrl(formatUrl(lastRequest)).pathname
+  ) {
     return;
   }
 
@@ -413,7 +443,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
 
   if (options.expectHttpResponseBodyMatch) {
     for (const expectedMatch of options.expectHttpResponseBodyMatch) {
-      if (new RegExp(expectedMatch).exec(body)) {
+      if (new RegExp(expectedMatch, 'u').exec(body)) {
         continue;
       }
 
@@ -428,7 +458,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
   if (options.expectHttpResponseBodyMismatch) {
     for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
 
-      const match = new RegExp(expectedMismatch).exec(body);
+      const match = new RegExp(expectedMismatch, 'u').exec(body);
       if (!match) {
         continue;
       }
@@ -473,12 +503,9 @@ function validateHttpStatusCode(res: IncomingMessage, failures: Failure[], optio
       continue;
     }
 
-    const rangeMatch = httpStatusCodeRangeRegExp.exec(code);
-    if (rangeMatch) {
-      const rangeStart = parseInt(rangeMatch[1], 10) * 100;
-      if (actual && actual >= rangeStart && actual <= rangeStart + 99) {
-        return;
-      }
+    const rangeStart = getHttpStatusRangeStart(code);
+    if (rangeStart && actual && actual >= rangeStart && actual <= rangeStart + 99) {
+      return;
     }
 
     const asNumber = Number(code);

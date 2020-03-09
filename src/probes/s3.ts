@@ -4,31 +4,27 @@ import { assign, last, merge, pick } from 'lodash';
 import moment from 'moment';
 import { parse as parseUrl, UrlWithStringQuery } from 'url';
 
-import { Config, GeneralOptions } from '../config';
 import { buildMetric, Metric } from '../metrics';
 import { getPresetOptions } from '../presets';
-import { ProbeResult, promisified, Raw, toArray, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
+import { Config, GeneralOptions, ProbeResult } from '../types';
+import { promisified, Raw, toArray, validateBooleanOption, validateStringArrayOption, validateStringOption } from '../utils';
+import { S3ProbeOptions } from './options';
 
 const optionNames = [
-  's3AccessKeyId', 's3SecretAccessKey',
-  's3ByPrefix', 's3ByPrefixOnly', 's3Versions'
+  's3AccessKeyId',
+  's3SecretAccessKey',
+  's3ByPrefix',
+  's3ByPrefixOnly',
+  's3Versions'
 ];
-
-export interface S3ProbeOptions {
-  s3AccessKeyId?: string;
-  s3SecretAccessKey?: string;
-  s3ByPrefix?: string[];
-  s3ByPrefixOnly?: boolean;
-  s3Versions?: boolean;
-}
 
 export async function getS3ProbeOptions(target: string, config: Config, ctx?: Context): Promise<S3ProbeOptions> {
 
   const s3Url = parseUrl(target);
 
   const targetOptions = {
-    s3AccessKeyId: s3Url.auth ? s3Url.auth.replace(/:.*/, '') : undefined,
-    s3SecretAccessKey: s3Url.auth && /:.+/.exec(s3Url.auth) ? s3Url.auth.replace(/[^:]+:/, '') : undefined
+    s3AccessKeyId: s3Url.auth ? s3Url.auth.replace(/:.*/u, '') : undefined,
+    s3SecretAccessKey: s3Url.auth && /:.+/u.exec(s3Url.auth) ? s3Url.auth.replace(/[^:]+:/u, '') : undefined
   };
 
   const queryDefaults = {};
@@ -94,9 +90,13 @@ export async function probeS3(target: string, options: S3ProbeOptions): Promise<
     globalTags.prefix = '';
 
     for (const aggregationPrefix of aggregationPrefixes) {
+
       const tags = { prefix: aggregationPrefix };
-      const matchingObjects = objects.filter((o: any) => o.Key.indexOf(aggregationPrefix) === 0);
-      const matchingVersions = options.s3Versions ? versions.filter((v: any) => v.Key.indexOf(aggregationPrefix) === 0) : undefined;
+      const matchingObjects = objects.filter((object: any) => object.Key.indexOf(aggregationPrefix) === 0);
+      const matchingVersions = options.s3Versions ?
+        versions.filter((version: any) => version.Key.indexOf(aggregationPrefix) === 0) :
+        undefined;
+
       addS3Metrics(result.metrics, tags, matchingObjects, matchingVersions);
     }
   }
@@ -120,7 +120,7 @@ export function validateS3ProbeOptions(options: Raw<S3ProbeOptions>): S3ProbeOpt
 
 function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, objects: any[], versions?: any[]) {
 
-  const objectsSortedByDate = objects.sort((a, b) => a.LastModified.getTime() - b.LastModified.getTime());
+  const objectsSortedByDate = objects.sort((oa, ob) => oa.LastModified.getTime() - ob.LastModified.getTime());
 
   metrics.push(buildMetric(
     's3FirstObjectModificationDate',
@@ -162,7 +162,7 @@ function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, object
     tags
   ));
 
-  const objectSizes = objects.map(o => o.Size);
+  const objectSizes = objects.map(object => object.Size);
 
   metrics.push(buildMetric(
     's3SmallestObjectSize',
@@ -183,16 +183,20 @@ function addS3Metrics(metrics: Metric[], tags: { [key: string]: string }, object
   metrics.push(buildMetric(
     's3ObjectsTotalSize',
     'bytes',
-    objects.map(o => Number(o.Size)).reduce((memo, size) => memo + size, 0),
+    objects.map(object => Number(object.Size)).reduce((memo, size) => memo + size, 0),
     'Total size of objects',
     tags
   ));
 
+  addS3ObjectVersionMetrics(metrics, tags, versions);
+}
+
+function addS3ObjectVersionMetrics(metrics: Metric[], tags: { [key: string]: string }, versions?: any[]) {
   if (!versions) {
     return;
   }
 
-  const versionsSortedByDate = versions.sort((a, b) => a.LastModified.getTime() - b.LastModified.getTime());
+  const versionsSortedByDate = versions.sort((va, vb) => va.LastModified.getTime() - vb.LastModified.getTime());
 
   metrics.push(buildMetric(
     's3FirstObjectVersionModificationDate',
@@ -243,7 +247,7 @@ function getS3ProbeDefaultOptions(options: GeneralOptions): S3ProbeOptions {
 }
 
 function getS3Prefixes(targetUrl: UrlWithStringQuery, options: S3ProbeOptions) {
-  const basePrefix = targetUrl.pathname ? targetUrl.pathname.replace(/^\//, '') : undefined;
+  const basePrefix = targetUrl.pathname ? targetUrl.pathname.replace(/^\//u, '') : undefined;
   return options.s3ByPrefix && options.s3ByPrefixOnly ? options.s3ByPrefix.map(prefix => `${basePrefix ?? ''}${prefix}`) : [ basePrefix ];
 }
 
@@ -261,14 +265,21 @@ async function listObjectsAndVersions(targetUrl: UrlWithStringQuery, options: S3
 
   const prefixes = getS3Prefixes(targetUrl, options);
   const objectsPromise = listByPrefixesRecursively(s3, { Bucket: bucket }, prefixes, listObjectsRecursively);
-  const versionsPromise = options.s3Versions ? listByPrefixesRecursively(s3, { Bucket: bucket }, prefixes, listObjectVersionsRecursively) : Promise.resolve([]);
+  const versionsPromise = options.s3Versions ?
+    listByPrefixesRecursively(s3, { Bucket: bucket }, prefixes, listObjectVersionsRecursively) :
+    Promise.resolve([]);
 
   return Promise.all([ objectsPromise, versionsPromise ]);
 }
 
-async function listByPrefixesRecursively<O extends { Prefix?: string }>(s3: aws.S3, options: O, prefixes: Array<string | undefined>, func: (s3: aws.S3, options: O) => Promise<any[]>) {
+async function listByPrefixesRecursively<O extends { Prefix?: string }>(
+  s3: aws.S3,
+  options: O,
+  prefixes: Array<string | undefined>,
+  func: (s3: aws.S3, options: O) => Promise<any[]>
+) {
   const results = await Promise.all(prefixes.map(prefix => func(s3, { ...options, Prefix: prefix })));
-  return results.reduce((memo, r) => memo.concat(r));
+  return results.reduce((memo, result) => memo.concat(result));
 }
 
 async function listObjectsRecursively(s3: aws.S3, options: aws.S3.ListObjectsV2Request, objects: any[] = []): Promise<any[]> {
@@ -292,7 +303,11 @@ async function listObjectVersionsRecursively(s3: aws.S3, options: aws.S3.ListObj
     versions.push(...res.Versions);
 
     if (res.IsTruncated && res.NextKeyMarker && res.NextVersionIdMarker) {
-      return listObjectVersionsRecursively(s3, { ...options, KeyMarker: res.NextKeyMarker, VersionIdMarker: res.NextVersionIdMarker }, versions);
+      return listObjectVersionsRecursively(s3, {
+        ...options,
+        KeyMarker: res.NextKeyMarker,
+        VersionIdMarker: res.NextVersionIdMarker
+      }, versions);
     }
   }
 

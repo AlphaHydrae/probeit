@@ -3,7 +3,7 @@ import { each, includes, reduce } from 'lodash';
 import moment from 'moment';
 
 import { Metric } from './metrics';
-import { ProbeResult } from './utils';
+import { ProbeResult } from './types';
 
 const SUFFIX_TYPES = [ 'bytes', 'seconds' ];
 
@@ -56,7 +56,11 @@ export function toPrometheusMetrics(result: ProbeResult, pretty: boolean) {
   }
 
   const noCounts: { [key: string]: number } = {};
-  const failureCountsByCause = result.failures.reduce((memo, failure) => ({ ...memo, [failure.cause]: (memo[failure.cause] || 0) + 1 }), noCounts);
+  const failureCountsByCause = result.failures.reduce((memo, failure) => ({
+    ...memo,
+    [failure.cause]: (memo[failure.cause] || 0) + 1
+  }), noCounts);
+
   each(failureCountsByCause, (value, key) => {
     lines.push(`probe_failures{cause="${key}"} ${value}`);
   });
@@ -78,10 +82,10 @@ export function buildValueLine(key: string, metric: Metric): string {
   } else if (metric.type === 'datetime') {
     return `${key} ${metric.value ? moment(metric.value).unix() : -1}`;
   } else if (includes([ 'bytes', 'quantity', 'seconds' ], metric.type)) {
-    return `${key} ${metric.value !== null ? metric.value : -1}`;
+    return `${key} ${metric.value ?? -1}`;
   } else if (includes([ 'number' ], metric.type)) {
-    return `${key} ${metric.value !== null ? metric.value : 'NaN'}`;
-  } else {
-    throw new Error(`Conversion to Prometheus metrics not supported for values of type "${metric.type}"`);
+    return `${key} ${metric.value ?? 'NaN'}`;
   }
+
+  throw new Error(`Conversion to Prometheus metrics not supported for values of type "${metric.type}"`);
 }
