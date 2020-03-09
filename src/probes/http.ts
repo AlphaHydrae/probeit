@@ -55,10 +55,10 @@ interface HttpProbeState {
 }
 
 export class Response extends IncomingMessage {
-  body: string;
+  body?: string;
 }
 
-export async function getHttpProbeOptions(target: string, config: Config, ctx?: Context): Promise<HttpProbeOptions> {
+export async function getHttpProbeOptions(_target: string, config: Config, ctx?: Context): Promise<HttpProbeOptions> {
 
   const queryOptions = {};
   if (ctx) {
@@ -443,7 +443,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
 
   if (options.expectHttpResponseBodyMatch) {
     for (const expectedMatch of options.expectHttpResponseBodyMatch) {
-      if (new RegExp(expectedMatch, 'u').exec(body)) {
+      if (typeof body === 'string' && new RegExp(expectedMatch, 'u').exec(body)) {
         continue;
       }
 
@@ -458,7 +458,7 @@ function validateHttpResponseBody(res: Response, failures: Failure[], options: H
   if (options.expectHttpResponseBodyMismatch) {
     for (const expectedMismatch of options.expectHttpResponseBodyMismatch) {
 
-      const match = new RegExp(expectedMismatch, 'u').exec(body);
+      const match = typeof body === 'string' ? new RegExp(expectedMismatch, 'u').exec(body) : undefined;
       if (!match) {
         continue;
       }

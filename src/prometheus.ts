@@ -34,7 +34,7 @@ export function toPrometheusMetrics(result: ProbeResult, pretty: boolean) {
       lines.push(`# TYPE ${metricKey} gauge`);
     }
 
-    const metricKeyTags = reduce(metric.tags, (memo, value, key) => [ ...memo, `${key}="${value}"` ], []).join(',');
+    const metricKeyTags = reduce(metric.tags, (memo, value, key) => [ ...memo, `${key}="${value}"` ], [] as string[]).join(',');
     if (metricKeyTags.length) {
       metricKey = `${metricKey}{${metricKeyTags}}`;
     }

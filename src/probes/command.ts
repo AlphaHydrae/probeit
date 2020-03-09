@@ -40,7 +40,7 @@ export function getCommandProbeOptions(target: string, config: Config, _ctx?: Co
   };
 }
 
-export async function probeCommand(target: string, options: CommandProbeOptions) {
+export async function probeCommand(_target: string, options: CommandProbeOptions) {
 
   const failures: Failure[] = [];
   const metrics: Metric[] = [];
