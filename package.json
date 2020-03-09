@@ -1,6 +1,6 @@
 {
   "name": "probeit",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "description": "Probe HTTP URLs and AWS S3 buckets.",
   "main": "lib/index.js",
   "types": "lib/src/index.d.ts",
