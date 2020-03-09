@@ -47,7 +47,7 @@
     "src"
   ],
   "dependencies": {
-    "aws-sdk": "^2.634.0",
+    "aws-sdk": "^2.635.0",
     "chalk": "^3.0.0",
     "fs-extra": "^8.1.0",
     "glob": "^7.1.6",
@@ -60,7 +60,7 @@
     "moment": "^2.24.0",
     "native-require": "^1.1.4",
     "url-join": "^4.0.1",
-    "yargs": "^15.1.0"
+    "yargs": "^15.3.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^8.1.0",
