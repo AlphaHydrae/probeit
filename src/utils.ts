@@ -44,7 +44,8 @@ export async function firstResolved<T = any>(...values: Array<T | Promise<T | un
 }
 
 export function increase(counters: { [key: string]: number | undefined }, key: string, by: number) {
-  counters[key] = counters[key] ?? 0 + by;
+  const previousValue = counters[key] ?? 0;
+  counters[key] = previousValue + by;
 }
 
 export function isFalseString(value: any): boolean {
